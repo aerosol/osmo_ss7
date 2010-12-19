@@ -86,12 +86,14 @@ idle(Prim = #primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
 			% generate proplist for SCRC initialization
 			ScocPropList = [{scrc_pid, self()}, {user_pid, UserPid}, {local_reference, LocalRef}],
 			{ok, ScocPid} = sccp_scoc:start_link(ScocPropList),
+			% insert SCOC instance in connection table
+			ConnTable = get(scoc_by_ref),
+			ets:insert_new(ConnTable, LocalRef, ScocPid),
 			% send a RCOC-CONNECTING.ind primitive to the new SCOC fsm
 			UserPrim = sccp_scoc:make_prim('RCOC','CONNECTION', indication, Msg#sccp_msg.parameters),
 			io:format("Sending ~p to ~p~n", [UserPrim, ScocPid]),
 			gen_fsm:send_event(ScocPid, UserPrim);
 		_ ->
-			
 			IsConnLess = is_connectionless(Msg#sccp_msg.msg_type),
 			case IsConnLess of
 				true ->
