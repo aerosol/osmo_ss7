@@ -240,7 +240,7 @@ encode_sccp_msgt(?SCCP_MSGT_IT, Params) ->
 	DstLocalRef = proplists:get_value(dst_local_ref, Params),
 	SrcLocalRef = proplists:get_value(src_local_ref, Params),
 	ProtoClass = proplists:get_value(protocol_class, Params),
-	SegmSeq = proplists:get_value(segm_seq, Params),
+	SegmSeq = proplists:get_value(seq_segm, Params),
 	Credit = proplists:get_value(credit, Params),
 	<<?SCCP_MSGT_IT:8, DstLocalRef:24, SrcLocalRef:24, ProtoClass:8, SegmSeq:16, Credit:8>>.
 % FIXME: XUDT/XUDTS, LUDT/LUDTS
