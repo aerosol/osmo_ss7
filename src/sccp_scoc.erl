@@ -90,7 +90,7 @@ make_prim(Subsys, GenName, SpecName, Param) ->
 		   spec_name = SpecName, parameters = Param}.
 
 % helper function to send a primitive to the user
-send_user(LoopDat = #state{user_pid = Pid}, Prim = #primitive{}) ->
+send_user(_LoopDat = #state{user_pid = Pid}, Prim = #primitive{}) ->
 	Pid ! {sccp, Prim}.
 
 % low-level functions regarding activity timers
@@ -111,7 +111,7 @@ start_inact_timers(LoopDat) ->
 				 [self(), {timer_expired, rx_inact_timer}]),
 	LoopDat#state{rx_inact_timer = Tiar, tx_inact_timer = Tias}.
 
-stop_inact_timers(LoopDat = #state{rx_inact_timer = Tiar, tx_inact_timer = Tias}) ->
+stop_inact_timers(#state{rx_inact_timer = Tiar, tx_inact_timer = Tias}) ->
 	timer:cancel(Tiar),
 	timer:cancel(Tias).
 
@@ -121,8 +121,8 @@ stop_inact_timers(LoopDat = #state{rx_inact_timer = Tiar, tx_inact_timer = Tias}
 % STATE Idle
 
 % N-CONNECT.req from user
-idle(Prim = #primitive{subsystem = 'N', gen_name = 'CONNECT',
-		       spec_name = request, parameters = Param}, LoopDat) ->
+idle(#primitive{subsystem = 'N', gen_name = 'CONNECT',
+	        spec_name = request, parameters = Param}, LoopDat) ->
 	% assign local reference and SLS
 	% determine protocol class and credit
 	LoopDat1 = LoopDat#state{local_reference = make_ref(), class = 2},
@@ -132,8 +132,8 @@ idle(Prim = #primitive{subsystem = 'N', gen_name = 'CONNECT',
 	{next_state, conn_pend_out, LoopDat1, ?CONNECTION_TIMER};
 
 % RCOC-CONNECTION.req from SCRC
-idle(Prim = #primitive{subsystem = 'RCOC', gen_name = 'CONNECTION',
-			spec_name = indication, parameters = Params}, LoopDat) ->
+idle(#primitive{subsystem = 'RCOC', gen_name = 'CONNECTION',
+		spec_name = indication, parameters = Params}, LoopDat) ->
 	% associate remote reference to connection section
 	RemRef = proplists:get_value(src_local_ref, Params),
 	% determine protocol class and FIXME: credit
@@ -145,8 +145,8 @@ idle(Prim = #primitive{subsystem = 'RCOC', gen_name = 'CONNECTION',
 	{next_state, conn_pend_in, LoopDat1};
 
 % RCOC-ROUTING_FAILURE.ind from SCRC
-idle(Prim = #primitive{subsystem = 'RCOC', gen_name = 'ROUTING FAILURE',
-			spec_name = indication, parameters = Param}, LoopDat) ->
+idle(#primitive{subsystem = 'RCOC', gen_name = 'ROUTING FAILURE',
+		spec_name = indication}, LoopDat) ->
 	gen_fsm:send_event(LoopDat#state.scrc_pid,
 			   make_prim('OCRC', 'CONNECTION REFUSED', indication)),
 	{next_state, idle, LoopDat};
@@ -154,15 +154,15 @@ idle(Prim = #primitive{subsystem = 'RCOC', gen_name = 'ROUTING FAILURE',
 %FIXME: request type 2 ?!?
 
 % RCOC-RELEASED.ind from SCRC
-idle(Prim = #primitive{subsystem = 'RCOC', gen_name = 'RELEASED',
-			spec_name = indication}, LoopDat) ->
+idle(#primitive{subsystem = 'RCOC', gen_name = 'RELEASED',
+		spec_name = indication}, LoopDat) ->
 	gen_fsm:send_event(LoopDat#state.scrc_pid,
 			   make_prim('OCRC', 'RELEASE COMPLETE', indication)),
 	{next_state, idle, LoopDat};
 
 % RCOC-RELEASE_COMPLETE.ind from SCRC
-idle(Prim = #primitive{subsystem = 'RCOC', gen_name = 'RELEASE COMPLETE',
-			spec_name = indication}, LoopDat) ->
+idle(#primitive{subsystem = 'RCOC', gen_name = 'RELEASE COMPLETE',
+		spec_name = indication}, LoopDat) ->
 	{next_state, idle, LoopDat};
 
 idle(#primitive{subsystem= 'RCOC', gen_name = 'DATA',
@@ -172,8 +172,8 @@ idle(#primitive{subsystem= 'RCOC', gen_name = 'DATA',
 	{next_state, idle, LoopDat}.
 
 % STATE Connection pending incoming
-conn_pend_in(Prim = #primitive{subsystem = 'N', gen_name = 'CONNECT',
-			       spec_name = response, parameters = Param}, LoopDat) ->
+conn_pend_in(#primitive{subsystem = 'N', gen_name = 'CONNECT',
+			spec_name = response, parameters = Param}, LoopDat) ->
 	io:format("SCOC N-CONNECT.resp LoopDat ~p~n", [LoopDat]),
 	% assign local reference, SLS, protocol class and credit for inc section
 	OutParam = [{dst_local_ref, LoopDat#state.remote_reference},
@@ -186,8 +186,8 @@ conn_pend_in(Prim = #primitive{subsystem = 'N', gen_name = 'CONNECT',
 	{next_state, active, LoopDat1};
 conn_pend_in(any_npdu_type, LoopDat) ->
 	{next_state, conn_pend_in, LoopDat};
-conn_pend_in(Prim = #primitive{subsystem = 'N', gen_name = 'DISCONNECT',
-			       spec_name = request, parameters = Param}, LoopDat) ->
+conn_pend_in(#primitive{subsystem = 'N', gen_name = 'DISCONNECT',
+			spec_name = request, parameters = Param}, LoopDat) ->
 	% release resourcers (local ref may have to be released an frozen)
 	gen_fsm:send_event(LoopDat#state.scrc_pid,
 			   make_prim('OCRC', 'CONNECTION REFUSED', indication, Param)),
@@ -200,7 +200,7 @@ disc_ind_stop_rel_3(LoopDat) ->
 	% stop inactivity timers
 	stop_inact_timers(LoopDat),
 	gen_fsm:send_event(LoopDat#state.scrc_pid,
-			   make_prim('OCRC', 'RELESED', indication)),
+			   make_prim('OCRC', 'RELEASED', indication)),
 	% start release timer
 	{next_state, disconnect_pending, LoopDat, ?RELEASE_TIMER}.
 
@@ -212,8 +212,8 @@ rel_res_disc_ind_idle_2(LoopDat) ->
 
 
 % STATE Connection pending outgoing
-conn_pend_out(Prim = #primitive{subsystem = 'N', gen_name = 'DISCONNECT',
-				spec_name = request, parameters = Param}, LoopDat) ->
+conn_pend_out(#primitive{subsystem = 'N', gen_name = 'DISCONNECT',
+			 spec_name = request}, LoopDat) ->
 	% FIXME: what about the connection timer ?
 	{next_state, wait_conn_conf, LoopDat};
 conn_pend_out(timeout, LoopDat) ->
@@ -273,8 +273,8 @@ relsd_tmr_disc_pend_6(LoopDat) ->
 	{next_state, disconnect_pending, LoopDat, ?RELEASE_TIMER}.
 
 % STATE Active
-active(Prim = #primitive{subsystem = 'N', gen_name = 'DISCONNECT',
-			 spec_name = request, parameters = Param}, LoopDat) ->
+active(#primitive{subsystem = 'N', gen_name = 'DISCONNECT',
+		  spec_name = request}, LoopDat) ->
 	% stop inactivity timers
 	start_inact_timers(LoopDat),
 	relsd_tmr_disc_pend_6(LoopDat);
@@ -319,25 +319,27 @@ active(routing_failure, LoopDat) ->
 % Connection release procedures at destination node
 %active(internal_disconnect) ->
 % Data transfer procedures
-active(Prim = #primitive{subsystem = 'N', gen_name = 'DATA',
-			 spec_name = request, parameters = Param}, LoopDat) ->
+active(#primitive{subsystem = 'N', gen_name = 'DATA',
+		  spec_name = request, parameters = Param}, LoopDat) ->
 	% FIXME Segment NSDU and assign value to bit M
 	% FIXME handle protocol class 3
 	gen_fsm:send_event(LoopDat#state.scrc_pid, {dt1, []}),
 	% restart send inactivity timer
 	LoopDat1 = restart_tx_inact_timer(LoopDat),
 	{next_state, active, LoopDat1};
-active({dt1, Param}, LoopDat) ->
+active(#primitive{subsystem = 'RCOC', gen_name = 'CONNECTION-MSG',
+		  spec_name = indication, parameters = MsgPrim}, LoopDat) ->
 	% restart receive inactivity timer
 	LoopDat1 = restart_rx_inact_timer(LoopDat),
 	% FIXME handle protocol class 3
 	% FIXME check for M-bit=1 and put data in Rx queue
 	% N-DATA.ind to user
-	send_user(LoopDat, make_prim('N', 'DATA', indication, Param)),
+	UserData = proplists:get_value(user_data, MsgPrim#primitive.parameters),
+	send_user(LoopDat, make_prim('N', 'DATA', indication, {user_data, UserData})),
 	{next_state, active, LoopDat1};
 % Reset procedures
-active(Prim = #primitive{subsystem = 'N', gen_name = 'RESET',
-			 spec_name = request, parameters = Param}, LoopDat) ->
+active(#primitive{subsystem = 'N', gen_name = 'RESET',
+		  spec_name = request, parameters = Param}, LoopDat) ->
 	gen_fsm:send_event(LoopDat#state.scrc_pid,
 			   make_prim('OCRC', 'RESET', request, Param)),
 	% start reset timer
@@ -408,12 +410,12 @@ res_out_res_conf_req(LoopDat) ->
 	{next_state, active, LoopDat1}.
 
 % STATE Reset outgoing
-reset_outgoing(Prim = #primitive{subsystem = 'N', gen_name = 'DATA',
-				 spec_name = request, parameters = Params}, LoopDat) ->
+reset_outgoing(#primitive{subsystem = 'N', gen_name = 'DATA',
+			  spec_name = request, parameters = Params}, LoopDat) ->
 	% FIXME received information ?!?
 	{next_state, reset_outgoing, LoopDat};
-reset_outgoing(Prim = #primitive{subsystem = 'N', gen_name = 'EXPEDITED DATA',
-				 spec_name = request, parameters = Params}, LoopDat) ->
+reset_outgoing(#primitive{subsystem = 'N', gen_name = 'EXPEDITED DATA',
+			  spec_name = request, parameters = Params}, LoopDat) ->
 	% FIXME received information ?!?
 	{next_state, reset_outgoing, LoopDat};
 reset_outgoing(timeout, LoopDat) ->
@@ -443,11 +445,11 @@ bway_res_res_conf_req(LoopDat) ->
 	{next_state, reset_incoming, LoopDat1}.
 
 % STATE Bothway Reset
-bothway_reset(Prim = #primitive{subsystem = 'N', gen_name = 'RESET',
-				spec_name = request, parameters = Params}, LoopDat) ->
+bothway_reset(#primitive{subsystem = 'N', gen_name = 'RESET',
+			 spec_name = request, parameters = Params}, LoopDat) ->
 	bway_res_req_resp(LoopDat);
-bothway_reset(Prim = #primitive{subsystem = 'N', gen_name = 'RESET',
-				spec_name = response, parameters = Params}, LoopDat) ->
+bothway_reset(#primitive{subsystem = 'N', gen_name = 'RESET',
+			 spec_name = response, parameters = Params}, LoopDat) ->
 	bway_res_req_resp(LoopDat);
 bothway_reset(timeout, LoopDat) ->
 	% FIXME check for temporary connection section
@@ -460,8 +462,8 @@ bothway_reset(other_npdu_type, LoopDat) ->
 	{next_state, bothway_reset, LoopDat}.
 
 % STATE Reset incoming
-reset_incoming(Prim = #primitive{subsystem = 'N', gen_name = 'RESET',
-				 spec_name = request, parameters = Params}, LoopDat) ->
+reset_incoming(#primitive{subsystem = 'N', gen_name = 'RESET',
+			  spec_name = request, parameters = Params}, LoopDat) ->
 	% received information
 	{nest_state, reset_incoming, LoopDat};
 %reset_incoming(error, LoopDat) ->
