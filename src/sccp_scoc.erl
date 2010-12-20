@@ -380,10 +380,10 @@ disconnect_pending(release_complete, LoopDat) ->
 disconnect_pending(released_error, LoopDat) ->
 	rel_res_stop_tmr_12(LoopDat);
 disconnect_pending(routing_failure, LoopDat) ->
-	{next_state, disconnect_pending};
+	{next_state, disconnect_pending, LoopDat};
 disconnect_pending(other_npdu_type, LoopDat) ->
 	% discared received message
-	{next_state, disconnect_pending};
+	{next_state, disconnect_pending, LoopDat};
 disconnect_pending(timeout, LoopDat) ->
 	gen_fsm:send_event(LoopDat#state.scrc_pid,
 			   make_prim('OCRC', 'RELEASED', indication)),
