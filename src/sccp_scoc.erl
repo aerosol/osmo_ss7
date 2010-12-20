@@ -75,7 +75,14 @@ handle_event(stop, _StateName, LoopDat) ->
 	{stop, normal, LoopDat};
 handle_event({timer_expired, tx_inact_timer}, State, LoopDat) ->
 	% FIXME: T(ias) is expired, send IT message
-	io:format("FIXME: T(ias) is expired, send IT message~n", []),
+	io:format("T(ias) is expired, send IT message~n", []),
+	#state{local_reference = LocRef, remote_reference = RemRef,
+	       class = Class} = LoopDat,
+	Params = [{dst_local_ref, RemRef},{src_local_ref, LocRef},
+		  {protocol_class, Class}, {seq_segm, 0}, {credit, 0}],
+	Msg = #sccp_msg{msg_type = ?SCCP_MSGT_IT, parameters = Params},
+	gen_fsm:send_event(LoopDat#state.scrc_pid,
+			   make_prim('OCRC','CONNECTION-MSG', request, Msg)),
 	{next_state, State, LoopDat};
 handle_event({timer_expired, rx_inact_timer}, State, LoopDat) ->
 	io:format("FIXME: T(iar) is expired, release connection~n", []),
