@@ -130,7 +130,7 @@ idle(#primitive{subsystem = 'OCRC', gen_name = 'CONNECTION-MSG',
 	% encode the actual SCCP message
 	EncMsg = sccp_codec:encode_sccp_msg(Msg),
 	% generate a MTP-TRANSFER.req primitive to the lower layer
-	send_mtp_transfer_down(LoopDat, Msg),
+	send_mtp_transfer_down(LoopDat, EncMsg),
 	{next_state, idle, LoopDat};
 % SCOC has received confirmation about new incoming connection from user
 idle(#primitive{subsystem = 'OCRC', gen_name = 'CONNECTION',
