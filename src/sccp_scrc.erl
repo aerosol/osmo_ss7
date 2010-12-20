@@ -71,8 +71,8 @@ init(InitPropList) ->
 	{ok, idle, LoopData}.
 
 
-idle(Prim = #primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
-		       spec_name = indication, parameters = Params}, LoopDat) ->
+idle(#primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
+		spec_name = indication, parameters = Params}, LoopDat) ->
 	{ok, Msg} = sccp_codec:parse_sccp_msg(Params),
 	io:format("Parsed Msg: ~p LoopDat ~p ~n", [Msg, LoopDat]),
 	case Msg of
@@ -93,6 +93,8 @@ idle(Prim = #primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
 			UserPrim = sccp_scoc:make_prim('RCOC','CONNECTION', indication, Msg#sccp_msg.parameters),
 			io:format("Sending ~p to ~p~n", [UserPrim, ScocPid]),
 			gen_fsm:send_event(ScocPid, UserPrim);
+		% T(ias) expired on the other end of the connection
+		%#sccp_msg{msg_type = ?SCCP_MSGT_IT} ->
 		_ ->
 			IsConnLess = is_connectionless(Msg#sccp_msg.msg_type),
 			case IsConnLess of
@@ -122,23 +124,27 @@ idle(Prim = #primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
 idle(sclc_scrc_connless_msg, LoopDat) ->
 	% FIXME: get to MTP-TRANSFER.req
 	{next_state, idle, LoopDat};
-idle(sclc_scrc_conn_msg, LoopDat) ->
+% connection oriented messages like N-DATA.req from user
+idle(#primitive{subsystem = 'OCRC', gen_name = 'CONNECTION-MSG',
+		spec_name = request, parameters = Msg}, LoopDat) ->
+	% encode the actual SCCP message
+	EncMsg = sccp_codec:encode_sccp_msg(Msg),
+	% generate a MTP-TRANSFER.req primitive to the lower layer
+	send_mtp_transfer_down(LoopDat, Msg),
 	{next_state, idle, LoopDat};
 % SCOC has received confirmation about new incoming connection from user
-idle(Prim = #primitive{subsystem = 'OCRC', gen_name = 'CONNECTION',
-		       spec_name = confirm, parameters = Params}, LoopDat) ->
+idle(#primitive{subsystem = 'OCRC', gen_name = 'CONNECTION',
+		spec_name = confirm, parameters = Params}, LoopDat) ->
 	% encode the actual SCCP message
 	EncMsg = sccp_codec:encode_sccp_msgt(?SCCP_MSGT_CC, Params),
 	% generate a MTP-TRANSFER.req primitive to the lower layer
-	MtpPrim = #primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
-			     spec_name = request, parameters = EncMsg},
-	send_mtp_down(LoopDat, MtpPrim),
+	send_mtp_transfer_down(LoopDat, EncMsg),
 	{next_state, idle, LoopDat};
 
 
 % triggered by N-CONNECT.req from user to SCOC:
-idle(Prim = #primitive{subsystem = 'OCRC', gen_name = 'CONNECTION',
-			spec_name = indication, parameters = Params}, LoopDat) ->
+idle(#primitive{subsystem = 'OCRC', gen_name = 'CONNECTION',
+		spec_name = indication, parameters = Params}, LoopDat) ->
 	{next_state, idle, LoopDat}.
 
 
@@ -150,3 +156,8 @@ send_mtp_down(#scrc_state{mtp_tx_action = MtpTxAction}, Prim) ->
 		_ ->
 			{error, "Unknown MtpTxAction"}
 	end.
+
+send_mtp_transfer_down(LoopDat, EncMsg) ->
+	MtpPrim = #primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
+			     spec_name = request, parameters = EncMsg},
+	send_mtp_down(LoopDat, MtpPrim).
