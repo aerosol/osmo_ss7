@@ -335,13 +335,13 @@ active(#primitive{subsystem = 'N', gen_name = 'DATA',
 	LoopDat1 = restart_tx_inact_timer(LoopDat),
 	{next_state, active, LoopDat1};
 active(#primitive{subsystem = 'RCOC', gen_name = 'CONNECTION-MSG',
-		  spec_name = indication, parameters = MsgPrim}, LoopDat) ->
+		  spec_name = indication, parameters = Msg}, LoopDat) ->
 	% restart receive inactivity timer
 	LoopDat1 = restart_rx_inact_timer(LoopDat),
 	% FIXME handle protocol class 3
 	% FIXME check for M-bit=1 and put data in Rx queue
 	% N-DATA.ind to user
-	UserData = proplists:get_value(user_data, MsgPrim#primitive.parameters),
+	UserData = proplists:get_value(user_data, Msg#sccp_msg.parameters),
 	send_user(LoopDat, make_prim('N', 'DATA', indication, {user_data, UserData})),
 	{next_state, active, LoopDat1};
 % Reset procedures
