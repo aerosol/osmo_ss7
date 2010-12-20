@@ -107,12 +107,13 @@ idle(Prim = #primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
 					% connection oriented messages need to go via SCOC instance
 					#sccp_msg{parameters = Opts} = Msg,
 					LocalRef = proplists:get_value(dst_local_ref, Opts),
+					UserPrim = sccp_scoc:make_prim('RCOC', 'CONNECTION-MSG', indication, Msg),
 					case LocalRef of
 						undefined ->
 							% FIXME: send SCCP_MSGT_ERR
 							io:format("Conn-Msg to undefined ref ~p~n", [Msg]);
 						_ ->
-							tx_prim_to_local_ref(Prim, LocalRef)
+							tx_prim_to_local_ref(UserPrim, LocalRef)
 					end
 			end,
 			LoopDat1 = LoopDat
