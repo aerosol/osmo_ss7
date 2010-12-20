@@ -51,13 +51,14 @@ loop(LoopData) ->
 	receive
 		{ipa_tcp_accept, S} ->
 			io:format("sccp_ipa_adapter: ipa_tcp_accept from ~p~n", [inet:peername(S)]),
+			IpaStreamId = LoopData#loop_data.ipa_stream_id,
 			% hand over the socket into the IPA stack
 			{ok, IpaPid} = ipa_proto:register_socket(S),
 			% Start the SCRC FSM for this virtual MTP link
-			ScrcMtpCb = {callback_fn, fun sccp_to_ipa_cb/2, [IpaPid, S, ?IPA_STREAM_ID_SCCP]},
+			ScrcMtpCb = {callback_fn, fun sccp_to_ipa_cb/2, [IpaPid, S, IpaStreamId]},
 			{ok, ScrcPid} = sccp_scrc:start_link([{mtp_tx_action, ScrcMtpCb}]),
 			% Register an IPA stream for SCCP
-			ipa_proto:register_stream(S, ?IPA_STREAM_ID_SCCP,
+			ipa_proto:register_stream(S, IpaStreamId,
 						  {callback_fn, fun sccp_ipa_adapter_cb/4, [ScrcPid]}),
 			ipa_proto:unblock(S),
 			loop(LoopData);
