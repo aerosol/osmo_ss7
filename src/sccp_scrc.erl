@@ -88,7 +88,7 @@ idle(#primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
 			{ok, ScocPid} = sccp_scoc:start_link(ScocPropList),
 			% insert SCOC instance in connection table
 			ConnTable = get(scoc_by_ref),
-			ets:insert_new(ConnTable, LocalRef, ScocPid),
+			ets:insert_new(ConnTable, {LocalRef, ScocPid}),
 			% send a RCOC-CONNECTING.ind primitive to the new SCOC fsm
 			UserPrim = sccp_scoc:make_prim('RCOC','CONNECTION', indication, Msg#sccp_msg.parameters),
 			io:format("Sending ~p to ~p~n", [UserPrim, ScocPid]),
