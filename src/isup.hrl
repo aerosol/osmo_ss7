@@ -100,3 +100,9 @@
 	screening_ind,		% only in calling party
 	phone_number}
 	).
+
+-record(isup_msg, {
+	msg_type,
+	cic,
+	parameters
+	}).

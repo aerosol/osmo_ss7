@@ -23,11 +23,13 @@
 
 -export([parse_isup_msg/1, encode_isup_msg/1]).
 
+-compile(export_all).
+
 parse_isup_party(<<>>, OddEven, DigitList) ->
 	% in case of odd number of digits, we need to cut the last
 	case OddEven of
 		1 ->
-			lists:sublist(DigitList, lists:length(DigitList)-1);
+			lists:sublist(DigitList, length(DigitList)-1);
 		0 ->
 			DigitList
 	end;
@@ -41,7 +43,7 @@ parse_isup_party(BinBcd, OddEven) when is_binary(BinBcd) ->
 
 
 % parse a single option
-parse_isup_opt(?ISUP_PAR_CALLED_P_NUM, OptLen, Content) ->
+parse_isup_opt(OptType = ?ISUP_PAR_CALLED_P_NUM, _OptLen, Content) ->
 	% C.3.7 Called Party Number
 	<<OddEven:1, Nature:7, Inn:1, NumPlan:3, 0:4, Remain/binary>> = Content,
 	PhoneNum = parse_isup_party(Remain, OddEven),
@@ -49,7 +51,7 @@ parse_isup_opt(?ISUP_PAR_CALLED_P_NUM, OptLen, Content) ->
 				internal_net_num = Inn,
 				numbering_plan = NumPlan,
 				phone_number = PhoneNum}};
-parse_isup_opt(?ISUP_PAR_CALLING_P_NUM, OptLen, Content) ->
+parse_isup_opt(OptType = ?ISUP_PAR_CALLING_P_NUM, _OptLen, Content) ->
 	% C.3.8 Calling Party Number
 	<<OddEven:1, Nature:7, Ni:1, NumPlan:3, PresRestr:2, Screen:2, Remain/binary>> = Content,
 	PhoneNum = parse_isup_party(Remain, OddEven),
@@ -59,7 +61,7 @@ parse_isup_opt(?ISUP_PAR_CALLING_P_NUM, OptLen, Content) ->
 				present_restrict = PresRestr,
 				screening_ind = Screen,
 				phone_number = PhoneNum}};
-parse_isup_opt(?ISUP_PAR_CONNECTED_NUM, OptLen, Content) ->
+parse_isup_opt(OptType = ?ISUP_PAR_CONNECTED_NUM, _OptLen, Content) ->
 	% C.3.14 Connected Number
 	<<OddEven:1, Nature:7, 0:1, NumPlan:3, PresRestr:2, Screen:2, Remain/binary>> = Content,
 	PhoneNum = parse_isup_party(Remain, OddEven),
@@ -68,9 +70,9 @@ parse_isup_opt(?ISUP_PAR_CONNECTED_NUM, OptLen, Content) ->
 				present_restrict = PresRestr,
 				screening_ind = Screen,
 				phone_number = PhoneNum}};
-parse_isup_opt(?ISUP_PAR_SUBSEQ_NUM, OptLen, Content) ->
+parse_isup_opt(OptType = ?ISUP_PAR_SUBSEQ_NUM, _OptLen, Content) ->
 	% C.3.32 Subsequent Number
-	<<OddEven:1, Spare:7, Remain/binary>> = Content,
+	<<OddEven:1, 0:7, Remain/binary>> = Content,
 	PhoneNum = parse_isup_party(Remain, OddEven),
 	{OptType, #party_number{phone_number = PhoneNum}};
 parse_isup_opt(OptType, OptLen, Content) ->
@@ -86,7 +88,9 @@ parse_isup_opts(<<0>>, OptList) ->
 parse_isup_opts(OptBin, OptList) when is_binary(OptBin) ->
 	<<OptType:8, OptLen:8, Content:OptLen/binary, Remain/binary>> = OptBin,
 	NewOpt = parse_isup_opt(OptType, OptLen, Content),
-	parse_isup_opts(Remain, [NewOpt|OptList]).
+	parse_isup_opts(Remain, OptList ++ [NewOpt]).
+parse_isup_opts(OptBin) ->
+	parse_isup_opts(OptBin, []).
 
 % References to 'Tabe C-xxx' are to Annex C of Q.767
 
@@ -112,7 +116,11 @@ parse_isup_msgt(?ISUP_MSGT_CPG, Bin) ->
 % Table C-9	Circuit group reset acknowledgement
 parse_isup_msgt(?ISUP_MSGT_GRA, Bin) ->
 	% V: Range and status
-	0;
+	<<PtrVar:8, Remain/binary>> = Bin,
+	RangStsLen = binary:at(Remain, PtrVar),
+	RangeStatus = binary:part(Remain, PtrVar+1, RangStsLen),
+	RangeStsTuple = {?ISUP_PAR_RANGE_AND_STATUS, {RangStsLen, RangeStatus}},
+	[RangeStsTuple];
 % Table C-11	Connect
 parse_isup_msgt(?ISUP_MSGT_CON, Bin) ->
 	<<BackCallInd:16, Remain/binary>> = Bin,
@@ -126,24 +134,38 @@ parse_isup_msgt(?ISUP_MSGT_COT, Bin) ->
 % Table C-16	Initial address
 parse_isup_msgt(?ISUP_MSGT_IAM, Bin) ->
 	<<CINat:8, FwCallInd:16/big, CallingCat:8, TransmReq:8, VarAndOpt/binary>> = Bin,
+	%<<CINat:8, FwCallInd:16/big, CallingCat:8, TransmReq:8, PtrVar:8, PtrOpt:8, VarAndOpt/binary>> = Bin,
 	FixedOpts = [{conn_ind_nature, CINat}, {fw_call_ind, FwCallInd}, {calling_cat, CallingCat},
 		     {transm_medium_req, TransmReq}],
+	<<PtrVar:8, PtrOpt:8, _/binary>> = VarAndOpt,
 	% V: Called Party Number
-	VarOpts = FIXME,
+	CalledPartyLen = binary:at(VarAndOpt, PtrVar),
+	CalledParty = binary:part(VarAndOpt, PtrVar+1, CalledPartyLen),
+	VarOpts = [parse_isup_opt(?ISUP_PAR_CALLED_P_NUM, CalledPartyLen, CalledParty)],
+	% Optional part
+	Remain = binary:part(VarAndOpt, 1 + PtrOpt, byte_size(VarAndOpt)-(1+PtrOpt)),
 	Opts = parse_isup_opts(Remain),
-	[FixedOpts,VarOpts,Opts];
+	FixedOpts ++ VarOpts ++ Opts;
 % Table C-17	Release
 parse_isup_msgt(?ISUP_MSGT_REL, Bin) ->
+	<<PtrVar:8, PtrOpt:8, VarAndOpt/binary>> = Bin,
 	% V: Cause indicators
-	VarOpts = FIXME,
+	CauseIndLen = binary:at(VarAndOpt, PtrVar),
+	CauseInd = binary:part(VarAndOpt, PtrVar+1, CauseIndLen),
+	VarOpts = {?ISUP_PAR_CAUSE_IND, {CauseIndLen, CauseInd}},
+	Remain = binary:part(VarAndOpt, 1 + PtrOpt, byte_size(VarAndOpt)-(1+PtrOpt)),
 	Opts = parse_isup_opts(Remain),
-	[VarOpts,Opts];
+	VarOpts ++ Opts;
 % Table C-19	Subsequent address
 parse_isup_msgt(?ISUP_MSGT_SAM, Bin) ->
+	<<PtrVar:8, PtrOpt:8, VarAndOpt/binary>> = Bin,
 	% V: Subsequent number
-	VarOpts = FIXME,
+	SubseqNumLen = binary:at(VarAndOpt, PtrVar),
+	SubsetNum = binary:part(VarAndOpt, PtrVar+1, SubseqNumLen),
+	VarOpts = [{?ISUP_PAR_SUBSEQ_NUM, {SubseqNumLen, SubsetNum}}],
+	Remain = binary:part(VarAndOpt, 1 + PtrOpt, byte_size(VarAndOpt)-(1+PtrOpt)),
 	Opts = parse_isup_opts(Remain),
-	[VarOpts,Opts];
+	VarOpts ++ Opts;
 % Table C-21	Suspend, Resume
 parse_isup_msgt(Msgt, Bin) when Msgt == ?ISUP_MSGT_RES; Msgt == ?ISUP_MSGT_SUS ->
 	<<SuspResInd:8, Remain/binary>> = Bin,
@@ -158,33 +180,38 @@ parse_isup_msgt(M, <<>>) when
 	M == ?ISUP_MSGT_RSC;
 	M == ?ISUP_MSGT_UBL;
 	M == ?ISUP_MSGT_UBA ->
-		[].
+		[];
 % Table C-25
 parse_isup_msgt(M, Bin) when
 	M == ?ISUP_MSGT_CGB;
 	M == ?ISUP_MSGT_CGBA;
-	M == ISUP_MSGT_CGU;
-	M == ISUP_MSGT_CGUA ->
-		<<CGMsgt:8, VarBin/binary>> = Bin,
+	M == ?ISUP_MSGT_CGU;
+	M == ?ISUP_MSGT_CGUA ->
+		<<CGMsgt:8, PtrVar:8, VarBin/binary>> = Bin,
 		FixedOpts = [{cg_supv_msgt, CGMsgt}],
 		% V: Range and status
-		VarOpts = FIXME,
-		[FixedOpts|VarOpts];
+		RangStsLen = binary:at(VarBin, PtrVar),
+		RangeStatus = binary:part(VarBin, PtrVar+1, RangStsLen),
+		VarOpts = [{?ISUP_PAR_RANGE_AND_STATUS, {RangStsLen, RangeStatus}}],
+		FixedOpts ++ VarOpts;
 % Table C-26	Circuit group reset
 parse_isup_msgt(?ISUP_MSGT_GRS, Bin) ->
+	<<PtrVar:8, VarBin/binary>> = Bin,
 	% V: Range without status
-	VarOpts = FIXME,
-	VarOpts.
+	RangeLen = binary:at(VarBin, PtrVar),
+	Range = binary:part(VarBin, PtrVar+1, RangeLen),
+	[{?ISUP_PAR_RANGE_AND_STATUS, {RangeLen, Range}}].
 
 
-parse_isup_msg(Databin) when is_binary(DataBin) ->
-	<<0:4, Cic:12/big, MsgType:8, Remain/binary>> = DataBin,
+parse_isup_msg(DataBin) when is_binary(DataBin) ->
+	<<Cic:12/little, 0:4, MsgType:8, Remain/binary>> = DataBin,
 	Opts = parse_isup_msgt(MsgType, Remain),
 	#isup_msg{cic = Cic, msg_type = MsgType, parameters = Opts}.
 
 
+% encode a phone number from a list of digits into the BCD binary sequence
 encode_isup_party(BcdList) ->
-	encode_isup_party(BcdList, <<>>, list:length(BcdList)).
+	encode_isup_party(BcdList, <<>>, length(BcdList)).
 encode_isup_party([], Bin, NumDigits) ->
 	case NumDigits rem 2 of
 		1 ->
@@ -193,8 +220,8 @@ encode_isup_party([], Bin, NumDigits) ->
 			{Bin, 0}
 	end;
 encode_isup_party([First,Second|BcdList], Bin, NumDigits) ->
-	encode_isup_party(BcdList, <<Bin/binary, Second:4, First:4>>).
-	
+	encode_isup_party(BcdList, <<Bin/binary, Second:4, First:4>>, NumDigits).
+
 % encode a single option
 encode_isup_opt(?ISUP_PAR_CALLED_P_NUM,
 		#party_number{nature_of_addr_ind = Nature,
@@ -203,7 +230,7 @@ encode_isup_opt(?ISUP_PAR_CALLED_P_NUM,
 			      phone_number=  PhoneNum}) ->
 	% C.3.7 Called Party Number
 	{PhoneBin, OddEven} = encode_isup_party(PhoneNum),
-	<<OddEven:1, Nature:7, Inn:1, NumPlan:3, 0:4, PhoneBin/binary>>.
+	<<OddEven:1, Nature:7, Inn:1, NumPlan:3, 0:4, PhoneBin/binary>>;
 encode_isup_opt(?ISUP_PAR_CALLING_P_NUM,
 		#party_number{nature_of_addr_ind = Nature,
 			      number_incompl_ind = Ni,
@@ -226,3 +253,5 @@ encode_isup_opt(?ISUP_PAR_CONNECTED_NUM,
 encode_isup_opt(OptNum, {OptLen, Binary}) when is_binary(Binary) ->
 	Binary.
 
+encode_isup_msg(#isup_msg{}) ->
+	foo.
