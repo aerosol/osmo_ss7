@@ -220,10 +220,12 @@ encode_isup_party([], Bin, NumDigits) ->
 			{Bin, 0}
 	end;
 encode_isup_party([First,Second|BcdList], Bin, NumDigits) ->
-	encode_isup_party(BcdList, <<Bin/binary, Second:4, First:4>>, NumDigits).
+	encode_isup_party(BcdList, <<Bin/binary, Second:4, First:4>>, NumDigits);
+encode_isup_party([Last], Bin, NumDigits) ->
+	encode_isup_party([], <<Bin/binary, 0:4, Last:4>>, NumDigits).
 
 % encode a single option
-encode_isup_opt(?ISUP_PAR_CALLED_P_NUM,
+encode_isup_par(?ISUP_PAR_CALLED_P_NUM,
 		#party_number{nature_of_addr_ind = Nature,
 			      internal_net_num = Inn,
 			      numbering_plan = NumPlan,
@@ -231,7 +233,7 @@ encode_isup_opt(?ISUP_PAR_CALLED_P_NUM,
 	% C.3.7 Called Party Number
 	{PhoneBin, OddEven} = encode_isup_party(PhoneNum),
 	<<OddEven:1, Nature:7, Inn:1, NumPlan:3, 0:4, PhoneBin/binary>>;
-encode_isup_opt(?ISUP_PAR_CALLING_P_NUM,
+encode_isup_par(?ISUP_PAR_CALLING_P_NUM,
 		#party_number{nature_of_addr_ind = Nature,
 			      number_incompl_ind = Ni,
 			      numbering_plan = NumPlan,
@@ -241,7 +243,7 @@ encode_isup_opt(?ISUP_PAR_CALLING_P_NUM,
 	% C.3.8 Calling Party Number
 	{PhoneBin, OddEven} = encode_isup_party(PhoneNum),
 	<<OddEven:1, Nature:7, Ni:1, NumPlan:3, PresRestr:2, Screen:2, PhoneBin/binary>>;
-encode_isup_opt(?ISUP_PAR_CONNECTED_NUM,
+encode_isup_par(?ISUP_PAR_CONNECTED_NUM,
 		#party_number{nature_of_addr_ind = Nature,
 			      numbering_plan = NumPlan,
 			      present_restrict = PresRestr,
@@ -250,8 +252,56 @@ encode_isup_opt(?ISUP_PAR_CONNECTED_NUM,
 	% C.3.14 Connected Number
 	{PhoneBin, OddEven} = encode_isup_party(PhoneNum),
 	<<OddEven:1, Nature:7, 0:1, NumPlan:3, PresRestr:2, Screen:2, PhoneBin/binary>>;
-encode_isup_opt(OptNum, {OptLen, Binary}) when is_binary(Binary) ->
+encode_isup_par(?ISUP_PAR_SUBSEQ_NUM,
+		#party_number{phone_number = PhoneNum}) ->
+	% C.3.32 Subsequent Number
+	{PhoneBin, OddEven} = encode_isup_party(PhoneNum),
+	<<OddEven:1, 0:7, PhoneBin/binary>>;
+encode_isup_par(Atom, More) when is_atom(Atom) ->
+	<<>>;
+encode_isup_par(OptNum, {OptLen, Binary}) when is_binary(Binary), is_integer(OptNum), is_integer(OptLen) ->
 	Binary.
 
-encode_isup_msg(#isup_msg{}) ->
-	foo.
+% encode a single OPTIONAL parameter (TLV type), skip all others
+encode_isup_optpar(ParNum, ParBody) when is_atom(ParNum) ->
+	<<>>;
+encode_isup_optpar(ParNum, ParBody) ->
+	ParBin = encode_isup_par(ParNum, ParBody),
+	ParLen = byte_size(ParBin),
+	<<ParNum:8, ParLen:8, ParBin/binary>>.
+
+% recursive function to encode all optional parameters 
+encode_isup_opts([], OutBin) ->
+	OutBin;
+encode_isup_opts([Opt|OptPropList], OutBin) ->
+	{OptType, OptBody} = Opt,
+	OptBin = encode_isup_optpar(OptType, OptBody),
+	encode_isup_opts(OptPropList, <<OutBin/binary, OptBin/binary>>).
+encode_isup_opts(OptPropList) ->
+	encode_isup_opts(OptPropList, <<>>).
+
+encode_isup_hdr(#isup_msg{msg_type = MsgType, cic = Cic}) ->
+	<<Cic:12/little, 0:4, MsgType:8>>.
+
+% Table C-16	Initial address
+encode_isup_msgt(?ISUP_MSGT_IAM, #isup_msg{parameters = Params}) ->
+	% Fixed part
+	CINat = proplists:get_value(conn_ind_nature, Params),
+	FwCallInd = proplists:get_value(fw_call_ind, Params),
+	CallingCat = proplists:get_value(calling_cat, Params),
+	TransmReq = proplists:get_value(transm_medium_req, Params),
+	PtrVar = 2, % one byte behind the PtrOpt
+	FixedBin = <<CINat:8, FwCallInd:16/big, CallingCat:8, TransmReq:8>>,
+	% V: Called Party Number
+	CalledParty = encode_isup_par(?ISUP_PAR_CALLED_P_NUM,
+					proplists:get_value(?ISUP_PAR_CALLED_P_NUM, Params)),
+	CalledPartyLen = byte_size(CalledParty),
+	% Optional part
+	PtrOpt = CalledPartyLen + 1 + 1, % 1 byte length, 1 byte start offset
+	OptBin = encode_isup_opts(Params),
+	<<FixedBin/binary, PtrVar:8, PtrOpt:8, CalledPartyLen:8, CalledParty/binary, OptBin/binary>>.
+
+encode_isup_msg(Msg = #isup_msg{msg_type = MsgType}) ->
+	HdrBin = encode_isup_hdr(Msg),
+	Remain = encode_isup_msgt(MsgType, Msg),
+	<<HdrBin/binary, Remain/binary>>.
