@@ -127,7 +127,7 @@ replace_isup_party_prefix(PartyNum, MatchPfx, NewPfx) ->
 	MatchPfxLen = length(MatchPfx),
 	Pfx = lists:sublist(DigitsIn, 1, MatchPfxLen),
 	if Pfx == MatchPfx ->
-		Trailer = lists:sublist(DigitsIn, MatchPfxLen, length(DigitsIn)-MatchPfxLen),
+		Trailer = lists:sublist(DigitsIn, MatchPfxLen+1, length(DigitsIn)-MatchPfxLen),
 		DigitsOut = NewPfx ++ Trailer,
 		io:format("ISUP Party Number rewrite: ~p -> ~p~n", [DigitsIn, DigitsOut]);
 	   true ->
