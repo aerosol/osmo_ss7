@@ -22,7 +22,7 @@
 
 -module(sctp_handler).
 -author("Harald Welte <laforge@gnumonks.org>").
--export([init/5]).
+-export([init/5, mangle_rx_data/3]).
 
 -include_lib("kernel/include/inet.hrl").
 -include_lib("kernel/include/inet_sctp.hrl").
@@ -126,7 +126,7 @@ loop(L = #loop_data{msc_sock=MscSock, msc_remote_ip=MscRemoteIp, msc_remote_port
 % handle incoming data on one of the SCTP sockets
 handle_rx_data(L, From, SRInf = #sctp_sndrcvinfo{ppid = 2, 
 						 stream = Stream}, Data) when is_binary(Data) ->
-	DataOut = mangle_rx_data(L, From, Data),
+	DataOut = sctp_handler:mangle_rx_data(L, From, Data),
 	% send mangled data to other peer
 	case From of
 		from_msc ->
