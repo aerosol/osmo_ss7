@@ -134,7 +134,6 @@ parse_isup_msgt(?ISUP_MSGT_COT, Bin) ->
 % Table C-16	Initial address
 parse_isup_msgt(?ISUP_MSGT_IAM, Bin) ->
 	<<CINat:8, FwCallInd:16/big, CallingCat:8, TransmReq:8, VarAndOpt/binary>> = Bin,
-	%<<CINat:8, FwCallInd:16/big, CallingCat:8, TransmReq:8, PtrVar:8, PtrOpt:8, VarAndOpt/binary>> = Bin,
 	FixedOpts = [{conn_ind_nature, CINat}, {fw_call_ind, FwCallInd}, {calling_cat, CallingCat},
 		     {transm_medium_req, TransmReq}],
 	<<PtrVar:8, PtrOpt:8, _/binary>> = VarAndOpt,
@@ -143,18 +142,28 @@ parse_isup_msgt(?ISUP_MSGT_IAM, Bin) ->
 	CalledParty = binary:part(VarAndOpt, PtrVar+1, CalledPartyLen),
 	VarOpts = [parse_isup_opt(?ISUP_PAR_CALLED_P_NUM, CalledPartyLen, CalledParty)],
 	% Optional part
-	Remain = binary:part(VarAndOpt, 1 + PtrOpt, byte_size(VarAndOpt)-(1+PtrOpt)),
-	Opts = parse_isup_opts(Remain),
+	case PtrOpt of
+		0 ->
+			Opts = [];
+		_ ->
+			Remain = binary:part(VarAndOpt, 1 + PtrOpt, byte_size(VarAndOpt)-(1+PtrOpt)),
+			Opts = parse_isup_opts(Remain)
+	end,
 	FixedOpts ++ VarOpts ++ Opts;
 % Table C-17	Release
 parse_isup_msgt(?ISUP_MSGT_REL, Bin) ->
 	<<PtrVar:8, PtrOpt:8, VarAndOpt/binary>> = Bin,
 	% V: Cause indicators
-	CauseIndLen = binary:at(VarAndOpt, PtrVar),
-	CauseInd = binary:part(VarAndOpt, PtrVar+1, CauseIndLen),
-	VarOpts = {?ISUP_PAR_CAUSE_IND, {CauseIndLen, CauseInd}},
-	Remain = binary:part(VarAndOpt, 1 + PtrOpt, byte_size(VarAndOpt)-(1+PtrOpt)),
-	Opts = parse_isup_opts(Remain),
+	CauseIndLen = binary:at(VarAndOpt, PtrVar-2),
+	CauseInd = binary:part(VarAndOpt, PtrVar-1, CauseIndLen),
+	VarOpts = [{?ISUP_PAR_CAUSE_IND, {CauseIndLen, CauseInd}}],
+	case PtrOpt of
+		0 ->
+			Opts = [];
+		_ ->
+			Remain = binary:part(VarAndOpt, 1 + PtrOpt, byte_size(VarAndOpt)-(1+PtrOpt)),
+			Opts = parse_isup_opts(Remain)
+	end,
 	VarOpts ++ Opts;
 % Table C-19	Subsequent address
 parse_isup_msgt(?ISUP_MSGT_SAM, Bin) ->
