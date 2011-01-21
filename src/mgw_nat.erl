@@ -122,7 +122,7 @@ mangle_rx_isup(From, MsgType, Msg = #isup_msg{parameters = Params}) ->
 	% return message with modified parameter list
 	Msg#isup_msg{parameters = ParamsOut}.
 
-% Mangle a Party Number in IAM from STP -> MSC
+% STP->MSC: Mangle a Party Number in IAM
 mangle_isup_number(from_stp, ?ISUP_MSGT_IAM, NumType, PartyNum) ->
 	case NumType of
 		?ISUP_PAR_CALLED_P_NUM ->
@@ -137,21 +137,35 @@ mangle_isup_number(from_stp, ?ISUP_MSGT_IAM, NumType, PartyNum) ->
 		_ ->
 			PartyNum
 	end;
-% Mangle connected number in response to IAM
+% MSC->STP: Mangle connected number in response to IAM
 mangle_isup_number(from_msc, MsgT, NumType, PartyNum) when MsgT == ?ISUP_MSGT_CON;
 							   MsgT == ?ISUP_MSGT_ANM ->
 	case NumType of
 		?ISUP_PAR_CONNECTED_NUM ->
 			io:format("CON MSRN rewrite (MSC->STP): "),
-			isup_party_replace_prefix(PartyNum, ?MSRN_PFX_MSC, ?MSRN_PFX_STP);
+			Num1 = isup_party_replace_prefix(PartyNum, ?MSRN_PFX_MSC, ?MSRN_PFX_STP),
+			if Num1 == PartyNum ->
+				isup_party_nationalize(Num1, ?INTERN_PFX);
+			   true ->
+				Num1
+			end;
 		_ ->
 			PartyNum
 	end;
-% Mangle IAM from MSC -> STP
+% MAC->STP: Mangle IAM international -> national
 mangle_isup_number(from_msc, ?ISUP_MSGT_IAM, NumType, PartyNum) ->
 	case NumType of
 		?ISUP_PAR_CALLED_P_NUM ->
 			isup_party_nationalize(PartyNum, ?INTERN_PFX);
+		_ ->
+			PartyNum
+	end;
+% STP->MSC: Mangle connected number in response to IAM (national->international)
+mangle_isup_number(from_stp, MsgT, NumType, PartyNum) when MsgT == ?ISUP_MSGT_CON;
+							   MsgT == ?ISUP_MSGT_ANM ->
+	case NumType of
+		?ISUP_PAR_CONNECTED_NUM ->
+			isup_party_internationalize(PartyNum, ?INTERN_PFX);
 		_ ->
 			PartyNum
 	end;
