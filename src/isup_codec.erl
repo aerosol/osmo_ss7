@@ -92,6 +92,17 @@ parse_isup_opts(OptBin, OptList) when is_binary(OptBin) ->
 parse_isup_opts(OptBin) ->
 	parse_isup_opts(OptBin, []).
 
+% Parse options preceeded by 1 byte OptPtr
+parse_isup_opts_ptr(OptBinPtr) ->
+	OptPtr = binary:at(OptBinPtr, 0),
+	case OptPtr of
+		0 ->
+			[];
+		_ ->
+			OptBin = binary:part(OptBinPtr, OptPtr, byte_size(OptBinPtr)-OptPtr),
+			parse_isup_opts(OptBin, [])
+	end.
+
 % References to 'Tabe C-xxx' are to Annex C of Q.767
 
 % Default case: no fixed and no variable parts, only options
@@ -100,18 +111,18 @@ parse_isup_msgt(M, Bin) when
 	M == ?ISUP_MSGT_ANM;
 	M == ?ISUP_MSGT_RLC;
 	M == ?ISUP_MSGT_FOT ->
-		parse_isup_opts(Bin);
+		parse_isup_opts_ptr(Bin);
 % Table C-5	Address complete
 parse_isup_msgt(?ISUP_MSGT_ACM, Bin) ->
 	<<BackCallInd:16, Remain/binary>> = Bin,
 	BciOpt = {backward_call_ind, BackCallInd},
-	Opts = parse_isup_opts(Remain),
+	Opts = parse_isup_opts_ptr(Remain),
 	[BciOpt|Opts];
 % Table C-7	Call progress
 parse_isup_msgt(?ISUP_MSGT_CPG, Bin) ->
 	<<EventInf:8, Remain/binary>> = Bin,
 	BciOpt = {event_info, EventInf},
-	Opts = parse_isup_opts(Remain),
+	Opts = parse_isup_opts_ptr(Remain),
 	[BciOpt|Opts];
 % Table C-9	Circuit group reset acknowledgement
 parse_isup_msgt(?ISUP_MSGT_GRA, Bin) ->
@@ -125,7 +136,7 @@ parse_isup_msgt(?ISUP_MSGT_GRA, Bin) ->
 parse_isup_msgt(?ISUP_MSGT_CON, Bin) ->
 	<<BackCallInd:16, Remain/binary>> = Bin,
 	BciOpt = {backward_call_ind, BackCallInd},
-	Opts = parse_isup_opts(Remain),
+	Opts = parse_isup_opts_ptr(Remain),
 	[BciOpt|Opts];
 % Table C-12	Continuity
 parse_isup_msgt(?ISUP_MSGT_COT, Bin) ->
@@ -179,7 +190,7 @@ parse_isup_msgt(?ISUP_MSGT_SAM, Bin) ->
 parse_isup_msgt(Msgt, Bin) when Msgt == ?ISUP_MSGT_RES; Msgt == ?ISUP_MSGT_SUS ->
 	<<SuspResInd:8, Remain/binary>> = Bin,
 	FixedOpts = [{susp_res_ind, SuspResInd}],
-	Opts = parse_isup_opts(Remain),
+	Opts = parse_isup_opts_ptr(Remain),
 	[FixedOpts|Opts];
 % Table C-23
 parse_isup_msgt(M, <<>>) when
@@ -266,20 +277,20 @@ encode_isup_par(?ISUP_PAR_SUBSEQ_NUM,
 	% C.3.32 Subsequent Number
 	{PhoneBin, OddEven} = encode_isup_party(PhoneNum),
 	<<OddEven:1, 0:7, PhoneBin/binary>>;
-encode_isup_par(Atom, More) when is_atom(Atom) ->
+encode_isup_par(Atom, _More) when is_atom(Atom) ->
 	<<>>;
 encode_isup_par(OptNum, {OptLen, Binary}) when is_binary(Binary), is_integer(OptNum), is_integer(OptLen) ->
 	Binary.
 
 % encode a single OPTIONAL parameter (TLV type), skip all others
-encode_isup_optpar(ParNum, ParBody) when is_atom(ParNum) ->
+encode_isup_optpar(ParNum, _ParBody) when is_atom(ParNum) ->
 	<<>>;
 encode_isup_optpar(ParNum, ParBody) ->
 	ParBin = encode_isup_par(ParNum, ParBody),
 	ParLen = byte_size(ParBin),
 	<<ParNum:8, ParLen:8, ParBin/binary>>.
 
-% recursive function to encode all optional parameters 
+% recursive function to encode all optional parameters
 encode_isup_opts([], OutBin) ->
 	OutBin;
 encode_isup_opts([Opt|OptPropList], OutBin) ->
@@ -292,6 +303,42 @@ encode_isup_opts(OptPropList) ->
 encode_isup_hdr(#isup_msg{msg_type = MsgType, cic = Cic}) ->
 	<<Cic:12/little, 0:4, MsgType:8>>.
 
+% Table C-5	Address complete
+encode_isup_msgt(?ISUP_MSGT_ACM, #isup_msg{parameters = Params}) ->
+	BackCallInd = proplists:get_value(backward_call_ind, Params),
+	OptBin = encode_isup_opts(Params),
+	case OptBin of
+		<<>> -> 	PtrOpt = 0;
+		_    ->		PtrOpt = 1
+	end,
+	<<BackCallInd:16, PtrOpt:8, OptBin/binary>>;
+% Table C-7	Call progress
+encode_isup_msgt(?ISUP_MSGT_CPG, #isup_msg{parameters = Params}) ->
+	EventInf = proplists:get_value(event_info, Params),
+	OptBin = encode_isup_opts(Params),
+	case OptBin of
+		<<>> -> 	PtrOpt = 0;
+		_    ->		PtrOpt = 1
+	end,
+	<<EventInf:8, PtrOpt:8, OptBin/binary>>;
+% Table C-9	Circuit group reset acknowledgement
+encode_isup_msgt(?ISUP_MSGT_GRA, #isup_msg{parameters = Params}) ->
+	% V: Range and status
+	{RangStsLen, RangeStatus} = proplists:get_value(?ISUP_PAR_RANGE_AND_STATUS, Params),
+	<<1:8, RangStsLen:8, RangeStatus/binary>>;
+% Table C-11	Connect
+encode_isup_msgt(?ISUP_MSGT_CON, #isup_msg{parameters = Params}) ->
+	BackCallInd = proplists:get_value(backward_call_ind, Params),
+	OptBin = encode_isup_opts(Params),
+	case OptBin of
+		<<>> -> 	PtrOpt = 0;
+		_    ->		PtrOpt = 1
+	end,
+	<<BackCallInd:16, PtrOpt:8, OptBin/binary>>;
+% Table C-12	Continuity
+encode_isup_msgt(?ISUP_MSGT_COT, #isup_msg{parameters = Params}) ->
+	ContInd = proplists:get_value(continuity_ind, Params),
+	<<ContInd:8>>;
 % Table C-16	Initial address
 encode_isup_msgt(?ISUP_MSGT_IAM, #isup_msg{parameters = Params}) ->
 	% Fixed part
@@ -306,9 +353,75 @@ encode_isup_msgt(?ISUP_MSGT_IAM, #isup_msg{parameters = Params}) ->
 					proplists:get_value(?ISUP_PAR_CALLED_P_NUM, Params)),
 	CalledPartyLen = byte_size(CalledParty),
 	% Optional part
-	PtrOpt = CalledPartyLen + 1 + 1, % 1 byte length, 1 byte start offset
 	OptBin = encode_isup_opts(Params),
-	<<FixedBin/binary, PtrVar:8, PtrOpt:8, CalledPartyLen:8, CalledParty/binary, OptBin/binary>>.
+	case OptBin of
+		<<>>	-> PtrOpt = 0;
+		_	-> PtrOpt = CalledPartyLen + 1 + 1 % 1 byte length, 1 byte start offset
+	end,
+	<<FixedBin/binary, PtrVar:8, PtrOpt:8, CalledPartyLen:8, CalledParty/binary, OptBin/binary>>;
+% Table C-17	Release
+encode_isup_msgt(?ISUP_MSGT_REL, #isup_msg{parameters = Params}) ->
+	PtrVar = 2, % one byte behind the PtrOpt
+	% V: Cause indicators
+	CauseInd = encode_isup_par(?ISUP_PAR_CAUSE_IND,
+					proplists:get_value(?ISUP_PAR_CAUSE_IND, Params)),
+	CauseIndLen = byte_size(CauseInd),
+	% Optional Part
+	OptBin = encode_isup_opts(Params),
+	case OptBin of
+		<<>>	-> PtrOpt = 0;
+		_	-> PtrOpt = CauseIndLen + 1 + 1	% 1 byte length, 1 byte start offset
+	end,
+	<<PtrVar:8, PtrOpt:8, CauseIndLen:8, CauseInd/binary, OptBin/binary>>;
+% Table C-19	Subsequent address
+encode_isup_msgt(?ISUP_MSGT_SAM, #isup_msg{parameters = Params}) ->
+	PtrVar = 2, % one byte behind the PtrOpt
+	% V: Subsequent number
+	SubseqNum = encode_isup_par(?ISUP_PAR_SUBSEQ_NUM,
+					proplists:get_value(?ISUP_PAR_SUBSEQ_NUM, Params)),
+	SubseqNumLen = byte_size(SubseqNum),
+	% Optional Part
+	OptBin = encode_isup_opts(Params),
+	case OptBin of
+		<<>>	-> PtrOpt = 0;
+		_	-> PtrOpt = SubseqNumLen + 1 + 1 % 1 byte length, 1 byte start offset
+	end,
+	<<PtrVar:8, PtrOpt:8, SubseqNumLen:8, SubseqNum/binary, OptBin/binary>>;
+% Table C-21	Suspend, Resume
+encode_isup_msgt(Msgt, #isup_msg{parameters = Params}) when Msgt == ?ISUP_MSGT_RES; Msgt == ?ISUP_MSGT_SUS ->
+	SuspResInd = proplists:get_value(susp_res_ind, Params),
+	OptBin = encode_isup_opts(Params),
+	case OptBin of
+		<<>>	-> PtrOpt = 0;
+		_	-> PtrOpt = 1
+	end,
+	<<SuspResInd:8, PtrOpt:8, OptBin/binary>>;
+% Table C-23
+encode_isup_msgt(M, #isup_msg{}) when
+	M == ?ISUP_MSGT_BLO;
+	M == ?ISUP_MSGT_BLA;
+	M == ?ISUP_MSGT_CCR;
+	M == ?ISUP_MSGT_RSC;
+	M == ?ISUP_MSGT_UBL;
+	M == ?ISUP_MSGT_UBA ->
+		<<>>;
+% Table C-25
+encode_isup_msgt(M, #isup_msg{parameters = Params}) when
+	M == ?ISUP_MSGT_CGB;
+	M == ?ISUP_MSGT_CGBA;
+	M == ?ISUP_MSGT_CGU;
+	M == ?ISUP_MSGT_CGUA ->
+		PtrVar = 1, % one byte behind the PtrVar
+		CGMsgt = proplists:get_value(cg_supv_msgt, Params),
+		% V: Range and status
+		{RangStsLen, RangeStatus} = proplists:get_value(?ISUP_PAR_RANGE_AND_STATUS, Params),
+		<<CGMsgt:8, PtrVar:8, RangStsLen:8, RangeStatus/binary>>;
+% Table C-26	Circuit group reset
+encode_isup_msgt(?ISUP_MSGT_GRS, #isup_msg{parameters = Params}) ->
+	PtrVar = 1, % one byte behind the PtrVar
+	{RangeLen, Range} = proplists:get_value(?ISUP_PAR_RANGE_AND_STATUS, Params),
+	% V: Range without status
+	<<PtrVar:8, RangeLen:8, Range/binary>>.
 
 encode_isup_msg(Msg = #isup_msg{msg_type = MsgType}) ->
 	HdrBin = encode_isup_hdr(Msg),
