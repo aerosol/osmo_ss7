@@ -91,6 +91,9 @@
 -define(ISUP_PAR_USER_USER_IND,		2#00101010).	% User-to-user indicators
 -define(ISUP_PAR_USER_USER_INFO,	2#00100000).	% User-to-user information
 
+-define(ISUP_ADDR_NAT_NATIONAL,		2#0000011).	% National (significant) number
+-define(ISUP_ADDR_NAT_INTERNATIONAL,	2#0000100).	% International number
+
 -record(party_number, {
 	nature_of_addr_ind,
 	internal_net_num,	% only in called party

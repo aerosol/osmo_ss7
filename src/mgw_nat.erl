@@ -95,7 +95,9 @@ mangle_rx_mtp3_serv(_L, _From, _, Mtp3) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 -define(MSRN_PFX_MSC,	[8,9,0,9,9]).
+%-define(MSRN_PFX_MSC,	[0,0,3,5,4,8,9,0,9,9]).
 -define(MSRN_PFX_STP,	[9,2,9,9,4,2,0,0]).
+-define(INTERN_PFX,	[6,3]).
 
 % iterate over list of parameters and call mangle_rx_isup_par() for each one
 mangle_rx_isup_params(_From, _MsgType, _Msg, ParListOut, []) ->
@@ -125,7 +127,13 @@ mangle_isup_number(from_stp, ?ISUP_MSGT_IAM, NumType, PartyNum) ->
 	case NumType of
 		?ISUP_PAR_CALLED_P_NUM ->
 			io:format("IAM MSRN rewrite (STP->MSC): "),
-			replace_isup_party_prefix(PartyNum, ?MSRN_PFX_STP, ?MSRN_PFX_MSC);
+			Num1 = isup_party_replace_prefix(PartyNum, ?MSRN_PFX_STP, ?MSRN_PFX_MSC),
+			% if there was no MSRN rewrite, internationalize it
+			if Num1 == PartyNum ->
+				isup_party_internationalize(Num1, ?INTERN_PFX);
+			   true ->
+				Num1
+			end;
 		_ ->
 			PartyNum
 	end;
@@ -135,7 +143,7 @@ mangle_isup_number(from_msc, MsgT, NumType, PartyNum) when MsgT == ?ISUP_MSGT_CO
 	case NumType of
 		?ISUP_PAR_CONNECTED_NUM ->
 			io:format("CON MSRN rewrite (MSC->STP): "),
-			replace_isup_party_prefix(PartyNum, ?MSRN_PFX_MSC, ?MSRN_PFX_STP);
+			isup_party_replace_prefix(PartyNum, ?MSRN_PFX_MSC, ?MSRN_PFX_STP);
 		_ ->
 			PartyNum
 	end;
@@ -144,16 +152,29 @@ mangle_isup_number(from_msc, _, _, PartyNum) ->
 	PartyNum.
 
 % replace the prefix of PartyNum with NewPfx _if_ the current prefix matches MatchPfx
-replace_isup_party_prefix(PartyNum, MatchPfx, NewPfx) ->
+isup_party_replace_prefix(PartyNum, MatchPfx, NewPfx) ->
 	DigitsIn = PartyNum#party_number.phone_number,
 	MatchPfxLen = length(MatchPfx),
 	Pfx = lists:sublist(DigitsIn, 1, MatchPfxLen),
 	if Pfx == MatchPfx ->
 		Trailer = lists:sublist(DigitsIn, MatchPfxLen+1, length(DigitsIn)-MatchPfxLen),
 		DigitsOut = NewPfx ++ Trailer,
-		io:format("ISUP Party Number rewrite: ~p -> ~p~n", [DigitsIn, DigitsOut]);
+		io:format("Prefix rewrite: ~p -> ~p~n", [DigitsIn, DigitsOut]);
 	   true ->
-		io:format("ISUP Party Number rewrite: NO MATCH (~p != ~p)~n", [Pfx, MatchPfx]),
+		io:format("Prefix rewrite: NO MATCH (~p != ~p)~n", [Pfx, MatchPfx]),
 		DigitsOut = DigitsIn
 	end,
 	PartyNum#party_number{phone_number = DigitsOut}.
+
+isup_party_internationalize(PartyNum, CountryCode) ->
+	#party_number{phone_number = DigitsIn, nature_of_addr_ind = Nature} = PartyNum,
+	case Nature of
+		?ISUP_ADDR_NAT_NATIONAL ->
+			DigitsOut = CountryCode ++ DigitsIn,
+			NatureOut = ?ISUP_ADDR_NAT_INTERNATIONAL,
+			io:format("Internationalize: ~p -> ~p~n", [DigitsIn, DigitsOut]);
+		_ ->
+			DigitsOut = DigitsIn,
+			NatureOut = Nature
+	end,
+	PartyNum#party_number{phone_number = DigitsOut, nature_of_addr_ind = NatureOut}.
