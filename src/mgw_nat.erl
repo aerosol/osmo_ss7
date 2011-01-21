@@ -69,21 +69,15 @@ mangle_rx_mtp3_serv(L, From, ?MTP3_SERV_ISUP, Mtp3 = #mtp3_msg{payload = Payload
 	Isup = isup_codec:parse_isup_msg(Payload),
 	io:format("ISUP Decode: ~p~n", [Isup]),
 	% FIXME
-	%mangle_rx_isup(From, Isup#isup_msg.msg_type, Isup),
-	case Isup#isup_msg.msg_type of
-		?ISUP_MSGT_IAM ->
-			io:format("ISUP Encode In: ~p~n", [Isup]),
-			Isup_out = isup_codec:encode_isup_msg(Isup),
-			io:format("ISUP Encode Out: ~p~n", [Isup_out]),
-			% FIXME
-			if Isup_out == Payload -> ok;
-			   true -> io:format("ISUP DATA NOT EQUAL!~n")
-			end,
-			% return modified MTP3 payload
-			Mtp3#mtp3_msg{payload = Isup_out};
-		_ ->
-			% return UNmodified MTP3 payload
-			Mtp3
+	IsupMangled = mangle_rx_isup(From, Isup#isup_msg.msg_type, Isup),
+	if IsupMangled == Isup ->
+		Mtp3;
+	   true ->
+		io:format("ISUP Encode In: ~p~n", [IsupMangled]),
+		Payload_out = isup_codec:encode_isup_msg(IsupMangled),
+		io:format("ISUP Encode Out: ~p~n", [Payload_out]),
+		% return modified MTP3 payload
+		Mtp3#mtp3_msg{payload = Payload_out}
 	end;
 % mangle the SCCP content
 mangle_rx_mtp3_serv(L, From, ?MTP3_SERV_SCCP, Mtp3 = #mtp3_msg{payload = Payload}) ->
@@ -95,27 +89,46 @@ mangle_rx_mtp3_serv(L, From, ?MTP3_SERV_SCCP, Mtp3 = #mtp3_msg{payload = Payload
 mangle_rx_mtp3_serv(_L, _From, _, Mtp3) ->
 	Mtp3.
 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Actual mangling of the decoded ISUP messages 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 -define(MSRN_PFX_MSC,	[8,9,0,9,9]).
 -define(MSRN_PFX_STP,	[9,2,9,9,4,2,0,0]).
 
 mangle_rx_isup(From, MsgType, Msg = #isup_msg{parameters = Params}) when
 				  MsgType == ?ISUP_MSGT_IAM	->
 	CalledNum = proplists:get_value(?ISUP_PAR_CALLED_P_NUM, Params),
-	DigitsIn = CalledNum#party_number.phone_number,
-	Last2DigF = lists:sublist(DigitsIn, length(DigitsIn)-2, 3),
-	case From of
-		from_stp ->
-			DigitsOut = ?MSRN_PFX_MSC ++ Last2DigF,
-			io:format("IAM MSRN rewrite (MSC->STP): ~p -> ~p~n",
-				  [DigitsIn, DigitsOut]);
-		from_msc ->
-			DigitsOut = DigitsIn,
-			io:format("No support for MSC->STP MSRN rewrite~n")
-	end,
-	CalledNumOut = CalledNum#party_number{phone_number=DigitsOut},
+	CalledNumOut = mangle_isup_number(From, MsgType, ?ISUP_PAR_CALLED_P_NUM, CalledNum),
 	ParamsDel = proplists:delete(?ISUP_PAR_CALLED_P_NUM, Params),
 	ParamsOut = [{?ISUP_PAR_CALLED_P_NUM, CalledNumOut}|ParamsDel],
-	#isup_msg{parameters = ParamsOut};
+	Msg#isup_msg{parameters = ParamsOut};
 % default case: no mangling
 mangle_rx_isup(_From, _Type, Msg) when is_record(Msg, isup_msg) ->
 	Msg.
+
+% Mangle a Party Number in IAM from STP -> MSC
+mangle_isup_number(from_stp, ?ISUP_MSGT_IAM, NumType, PartyNum) ->
+	case NumType of
+		?ISUP_PAR_CALLED_P_NUM ->
+			io:format("IAM MSRN rewrite (STP->MSC): "),
+			replace_isup_party_prefix(PartyNum, ?MSRN_PFX_STP, ?MSRN_PFX_MSC);
+		_ ->
+			PartyNum
+	end.
+
+% replace the prefix of PartyNum with NewPfx _if_ the current prefix matches MatchPfx
+replace_isup_party_prefix(PartyNum, MatchPfx, NewPfx) ->
+	DigitsIn = PartyNum#party_number.phone_number,
+	MatchPfxLen = length(MatchPfx),
+	Pfx = lists:sublist(DigitsIn, 1, MatchPfxLen),
+	if Pfx == MatchPfx ->
+		Trailer = lists:sublist(DigitsIn, MatchPfxLen, length(DigitsIn)-MatchPfxLen),
+		DigitsOut = NewPfx ++ Trailer,
+		io:format("ISUP Party Number rewrite: ~p -> ~p~n", [DigitsIn, DigitsOut]);
+	   true ->
+		io:format("ISUP Party Number rewrite: NO MATCH (~p != ~p)~n", [Pfx, MatchPfx]),
+		DigitsOut = DigitsIn
+	end,
+	PartyNum#party_number{phone_number = DigitsOut}.
