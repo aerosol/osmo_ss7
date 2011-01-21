@@ -129,6 +129,16 @@ mangle_isup_number(from_stp, ?ISUP_MSGT_IAM, NumType, PartyNum) ->
 		_ ->
 			PartyNum
 	end;
+% Mangle connected number in response to IAM
+mangle_isup_number(from_msc, MsgT, NumType, PartyNum) when MsgT == ?ISUP_MSGT_CON;
+							   MsgT == ?ISUP_MSGT_ANM ->
+	case NumType of
+		?ISUP_PAR_CONNECTED_NUM ->
+			io:format("CON MSRN rewrite (MSC->STP): "),
+			replace_isup_party_prefix(PartyNum, ?MSRN_PFX_MSC, ?MSRN_PFX_STP);
+		_ ->
+			PartyNum
+	end;
 % default case: no rewrite
 mangle_isup_number(from_msc, _, _, PartyNum) ->
 	PartyNum.
