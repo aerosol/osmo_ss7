@@ -353,7 +353,8 @@ encode_isup_msgt(?ISUP_MSGT_IAM, #isup_msg{parameters = Params}) ->
 					proplists:get_value(?ISUP_PAR_CALLED_P_NUM, Params)),
 	CalledPartyLen = byte_size(CalledParty),
 	% Optional part
-	OptBin = encode_isup_opts(Params),
+	Params2 = proplists:delete(?ISUP_PAR_CALLED_P_NUM, Params),
+	OptBin = encode_isup_opts(Params2),
 	case OptBin of
 		<<>>	-> PtrOpt = 0;
 		_	-> PtrOpt = CalledPartyLen + 1 + 1 % 1 byte length, 1 byte start offset
@@ -367,7 +368,8 @@ encode_isup_msgt(?ISUP_MSGT_REL, #isup_msg{parameters = Params}) ->
 					proplists:get_value(?ISUP_PAR_CAUSE_IND, Params)),
 	CauseIndLen = byte_size(CauseInd),
 	% Optional Part
-	OptBin = encode_isup_opts(Params),
+	Params2 = proplists:delete(?ISUP_PAR_CAUSE_IND, Params),
+	OptBin = encode_isup_opts(Params2),
 	case OptBin of
 		<<>>	-> PtrOpt = 0;
 		_	-> PtrOpt = CauseIndLen + 1 + 1	% 1 byte length, 1 byte start offset
@@ -381,7 +383,8 @@ encode_isup_msgt(?ISUP_MSGT_SAM, #isup_msg{parameters = Params}) ->
 					proplists:get_value(?ISUP_PAR_SUBSEQ_NUM, Params)),
 	SubseqNumLen = byte_size(SubseqNum),
 	% Optional Part
-	OptBin = encode_isup_opts(Params),
+	Params2 = proplists:delete(?ISUP_PAR_SUBSEQ_NUM, Params),
+	OptBin = encode_isup_opts(Params2),
 	case OptBin of
 		<<>>	-> PtrOpt = 0;
 		_	-> PtrOpt = SubseqNumLen + 1 + 1 % 1 byte length, 1 byte start offset
