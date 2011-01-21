@@ -303,6 +303,13 @@ encode_isup_opts(OptPropList) ->
 encode_isup_hdr(#isup_msg{msg_type = MsgType, cic = Cic}) ->
 	<<Cic:12/little, 0:4, MsgType:8>>.
 
+% Default case: no fixed and no variable parts, only options
+% ANM, RLC, FOT
+encode_isup_msgt(M, #isup_msg{parameters = Params}) when
+	M == ?ISUP_MSGT_ANM;
+	M == ?ISUP_MSGT_RLC;
+	M == ?ISUP_MSGT_FOT ->
+		encode_isup_opts(Params);
 % Table C-5	Address complete
 encode_isup_msgt(?ISUP_MSGT_ACM, #isup_msg{parameters = Params}) ->
 	BackCallInd = proplists:get_value(backward_call_ind, Params),
