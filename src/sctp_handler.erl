@@ -170,9 +170,9 @@ mangle_rx_mtp3(L, From, Mtp3 = #mtp3_msg{service_ind = Service}) ->
 
 % mangle the ISUP content
 mangle_rx_mtp3_serv(L, From, ?MTP3_SERV_ISUP, Mtp3 = #mtp3_msg{payload = Payload}) ->
-	io:format("ISUP~n"),
+	Isup = isup_codec:parse_isup_msg(Payload),
+	io:format("ISUP Decode: ~p~n", [Isup]),
 	% FIXME
-	%Isup = parse_isup_msg(Payload),
 	Mtp3;
 % mangle the SCCP content
 mangle_rx_mtp3_serv(L, From, ?MTP3_SERV_SCCP, Mtp3 = #mtp3_msg{payload = Payload}) ->
