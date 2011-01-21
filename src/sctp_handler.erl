@@ -138,8 +138,11 @@ handle_rx_data(L, From, SRInf = #sctp_sndrcvinfo{ppid = 2,
 	SndRcvInfo = #sctp_sndrcvinfo{ppid = 2, stream = Stream, assoc_id = AssocId},
 	%io:format("Sending ~p to ~p ~p~n", [DataOut, Sock, SndRcvInfo]),
 	% if they are not equal, we will abort here
-	DataOut = Data,
-	io:format("Data is equal~n"),
+	if DataOut == Data ->
+		ok;
+	   true ->
+		io:format("Data is NOT equal~n")
+	end,
 	ok = gen_sctp:send(Sock, SndRcvInfo, DataOut).
 
 
