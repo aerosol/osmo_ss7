@@ -84,12 +84,12 @@ loop(L = #loop_data{msc_sock=MscSock, msc_remote_ip=MscRemoteIp, msc_remote_port
 					NewL = L,
 					% maybe we should simply die?
 					io:format("MSC SCTP comm_lost~n"),
-					foo:bar();
+					exit(1);
 				addr_unreachable ->
 					NewL = L,
 					io:format("MSC SCTP addr_unreachable~n"),
 					% maybe we should simply die?
-					foo:bar()
+					exit(1)
 			end,
 			inet:setopts(MscSock, [{active, once}]);
 		% STP connect or disconnect
@@ -115,17 +115,28 @@ loop(L = #loop_data{msc_sock=MscSock, msc_remote_ip=MscRemoteIp, msc_remote_port
 			% maybe we should simply die?
 			NewL = L,
 			io:format("SCTP remote ~p shutdown~n", [RemoteIp]),
-			foo:bar();
+			exit(1);
 		Other ->
 			io:format("OTHER ~p~n", [Other]),
 			NewL = L
 	end,
 	loop(NewL).
 
+
+try_mangle(L, From, Data) ->
+	try mgw_nat:mangle_rx_data(L, From, Data) of
+		Val ->
+			Val
+		catch error:Error ->
+			% some parser error, simply forward msg unmodified
+			io:format("MGW NAT mangling Error: ~p~n", [Error]),
+			Data
+		end.
+
 % handle incoming data on one of the SCTP sockets
 handle_rx_data(L, From, SRInf = #sctp_sndrcvinfo{ppid = 2, 
 						 stream = Stream}, Data) when is_binary(Data) ->
-	DataOut = mgw_nat:mangle_rx_data(L, From, Data),
+	DataOut = try_mangle(L, From, Data),
 	% send mangled data to other peer
 	case From of
 		from_msc ->
