@@ -292,7 +292,7 @@ encode_isup_optpar(ParNum, ParBody) ->
 
 % recursive function to encode all optional parameters
 encode_isup_opts([], OutBin) ->
-	OutBin;
+	<<OutBin/binary, 0:8>>;
 encode_isup_opts([Opt|OptPropList], OutBin) ->
 	{OptType, OptBody} = Opt,
 	OptBin = encode_isup_optpar(OptType, OptBody),
