@@ -116,7 +116,10 @@ mangle_isup_number(from_stp, ?ISUP_MSGT_IAM, NumType, PartyNum) ->
 			replace_isup_party_prefix(PartyNum, ?MSRN_PFX_STP, ?MSRN_PFX_MSC);
 		_ ->
 			PartyNum
-	end.
+	end;
+% default case: no rewrite
+mangle_isup_number(from_msc, _, _, PartyNum) ->
+	PartyNum.
 
 % replace the prefix of PartyNum with NewPfx _if_ the current prefix matches MatchPfx
 replace_isup_party_prefix(PartyNum, MatchPfx, NewPfx) ->
