@@ -97,16 +97,28 @@ mangle_rx_mtp3_serv(_L, _From, _, Mtp3) ->
 -define(MSRN_PFX_MSC,	[8,9,0,9,9]).
 -define(MSRN_PFX_STP,	[9,2,9,9,4,2,0,0]).
 
-mangle_rx_isup(From, MsgType, Msg = #isup_msg{parameters = Params}) when
-				  MsgType == ?ISUP_MSGT_IAM	->
-	CalledNum = proplists:get_value(?ISUP_PAR_CALLED_P_NUM, Params),
-	CalledNumOut = mangle_isup_number(From, MsgType, ?ISUP_PAR_CALLED_P_NUM, CalledNum),
-	ParamsDel = proplists:delete(?ISUP_PAR_CALLED_P_NUM, Params),
-	ParamsOut = [{?ISUP_PAR_CALLED_P_NUM, CalledNumOut}|ParamsDel],
-	Msg#isup_msg{parameters = ParamsOut};
-% default case: no mangling
-mangle_rx_isup(_From, _Type, Msg) when is_record(Msg, isup_msg) ->
-	Msg.
+% iterate over list of parameters and call mangle_rx_isup_par() for each one
+mangle_rx_isup_params(_From, _MsgType, _Msg, ParListOut, []) ->
+	ParListOut;
+mangle_rx_isup_params(From, MsgType, Msg, ParListOut, [Par|ParList]) ->
+	ParOut = mangle_rx_isup_par(From, MsgType, Msg, Par),
+	mangle_rx_isup_params(From, MsgType, Msg, ParListOut++[ParOut], ParList).
+
+% manipulate phone numbers
+mangle_rx_isup_par(From, MsgType, Msg, {ParType, ParBody}) when
+					ParType == ?ISUP_PAR_CALLED_P_NUM;
+					ParType == ?ISUP_PAR_CALLING_P_NUM ->
+	NewParBody = mangle_isup_number(From, MsgType, ParType, ParBody),
+	{ParType, NewParBody};
+% defauly case: do not mangle this parameter
+mangle_rx_isup_par(_From, _MsgType, _Msg, Par) ->
+	Par.
+
+% mangle an incoming ISUP message
+mangle_rx_isup(From, MsgType, Msg = #isup_msg{parameters = Params}) ->
+	ParamsOut = mangle_rx_isup_params(From, MsgType, Msg, [], Params),
+	% return message with modified parameter list
+	Msg#isup_msg{parameters = ParamsOut}.
 
 % Mangle a Party Number in IAM from STP -> MSC
 mangle_isup_number(from_stp, ?ISUP_MSGT_IAM, NumType, PartyNum) ->
