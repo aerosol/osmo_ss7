@@ -83,9 +83,11 @@ loop(L = #loop_data{msc_sock=MscSock, msc_remote_ip=MscRemoteIp, msc_remote_port
 				comm_lost ->
 					NewL = L,
 					% maybe we should simply die?
+					io:format("MSC SCTP comm_lost~n"),
 					foo:bar();
 				addr_unreachable ->
 					NewL = L,
+					io:format("MSC SCTP addr_unreachable~n"),
 					% maybe we should simply die?
 					foo:bar()
 			end,
@@ -108,6 +110,12 @@ loop(L = #loop_data{msc_sock=MscSock, msc_remote_ip=MscRemoteIp, msc_remote_port
 			handle_rx_data(L, from_stp, Anc, Data),
 			inet:setopts(StpSock, [{active, once}]),
 			NewL = L;
+		{sctp, _Sock, RemoteIp, _Remote_port, {_Anc, Data}}
+					when is_record(Data, sctp_shutdown_event) ->
+			% maybe we should simply die?
+			NewL = L,
+			io:format("SCTP remote ~p shutdown~n", [RemoteIp]),
+			foo:bar();
 		Other ->
 			io:format("OTHER ~p~n", [Other]),
 			NewL = L
@@ -129,7 +137,7 @@ handle_rx_data(L, From, SRInf = #sctp_sndrcvinfo{ppid = 2,
 			AssocId = L#loop_data.msc_assoc_id
 	end,
 	SndRcvInfo = #sctp_sndrcvinfo{ppid = 2, stream = Stream, assoc_id = AssocId},
-	io:format("Sending ~p to ~p ~p~n", [DataOut, Sock, SndRcvInfo]),
+	%io:format("Sending ~p to ~p ~p~n", [DataOut, Sock, SndRcvInfo]),
 	% if they are not equal, we will abort here
 	DataOut = Data,
 	io:format("Data is equal~n"),
@@ -138,7 +146,7 @@ handle_rx_data(L, From, SRInf = #sctp_sndrcvinfo{ppid = 2,
 % mangle the received data
 mangle_rx_data(L, From, Data) when is_binary(Data) ->
 	{ok, M2ua} = m2ua_codec:parse_m2ua_msg(Data),
-	io:format("M2UA Decode: ~p~n", [M2ua]),
+	%io:format("M2UA Decode: ~p~n", [M2ua]),
 	case M2ua of
 		#m2ua_msg{msg_class = ?M2UA_MSGC_MAUP,
 			  msg_type = ?M2UA_MAUP_MSGT_DATA} ->
@@ -148,16 +156,16 @@ mangle_rx_data(L, From, Data) when is_binary(Data) ->
 			M2ua_out = M2ua
 	end,
 	% re-encode the data
-	io:format("M2UA Encode: ~p~n", [M2ua_out]),
+	%io:format("M2UA Encode: ~p~n", [M2ua_out]),
 	m2ua_codec:encode_m2ua_msg(M2ua_out).
 
 % mangle the received M2UA
 mangle_rx_m2ua_maup(L, From, M2ua = #m2ua_msg{parameters = Params}) ->
 	{_Len, M2uaPayload} = proplists:get_value(16#300, Params),
 	Mtp3 = mtp3_codec:parse_mtp3_msg(M2uaPayload),
-	io:format("MTP3 Decode: ~p~n", [Mtp3]),
+	%io:format("MTP3 Decode: ~p~n", [Mtp3]),
 	Mtp3_out = mangle_rx_mtp3(L, From, Mtp3),
-	io:format("MTP3 Encode: ~p~n", [Mtp3_out]),
+	%io:format("MTP3 Encode: ~p~n", [Mtp3_out]),
 	Mtp3OutBin = mtp3_codec:encode_mtp3_msg(Mtp3_out),
 	Params2 = proplists:delete(16#300, Params),
 	ParamsNew = Params2 ++ [{16#300, {byte_size(Mtp3OutBin), Mtp3OutBin}}],
@@ -170,10 +178,20 @@ mangle_rx_mtp3(L, From, Mtp3 = #mtp3_msg{service_ind = Service}) ->
 
 % mangle the ISUP content
 mangle_rx_mtp3_serv(L, From, ?MTP3_SERV_ISUP, Mtp3 = #mtp3_msg{payload = Payload}) ->
+	io:format("ISUP In: ~p~n", [Payload]),
 	Isup = isup_codec:parse_isup_msg(Payload),
 	io:format("ISUP Decode: ~p~n", [Isup]),
 	% FIXME
-	Mtp3;
+	case Isup#isup_msg.msg_type of
+		?ISUP_MSGT_IAM ->
+			io:format("ISUP Encode In: ~p~n", [Isup]),
+			Isup_out = isup_codec:encode_isup_msg(Isup),
+			io:format("ISUP Encode Out: ~p~n", [Isup_out]),
+			% FIXME
+			Mtp3;
+		_ ->
+			Mtp3
+	end;
 % mangle the SCCP content
 mangle_rx_mtp3_serv(L, From, ?MTP3_SERV_SCCP, Mtp3 = #mtp3_msg{payload = Payload}) ->
 	Sccp = sccp_codec:parse_sccp_msg(Payload),
