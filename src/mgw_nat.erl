@@ -147,6 +147,14 @@ mangle_isup_number(from_msc, MsgT, NumType, PartyNum) when MsgT == ?ISUP_MSGT_CO
 		_ ->
 			PartyNum
 	end;
+% Mangle IAM from MSC -> STP
+mangle_isup_number(from_msc, ?ISUP_MSGT_IAM, NumType, PartyNum) ->
+	case NumType of
+		?ISUP_PAR_CALLED_P_NUM ->
+			isup_party_nationalize(PartyNum, ?INTERN_PFX);
+		_ ->
+			PartyNum
+	end;
 % default case: no rewrite
 mangle_isup_number(from_msc, _, _, PartyNum) ->
 	PartyNum.
@@ -173,6 +181,27 @@ isup_party_internationalize(PartyNum, CountryCode) ->
 			DigitsOut = CountryCode ++ DigitsIn,
 			NatureOut = ?ISUP_ADDR_NAT_INTERNATIONAL,
 			io:format("Internationalize: ~p -> ~p~n", [DigitsIn, DigitsOut]);
+		_ ->
+			DigitsOut = DigitsIn,
+			NatureOut = Nature
+	end,
+	PartyNum#party_number{phone_number = DigitsOut, nature_of_addr_ind = NatureOut}.
+
+isup_party_nationalize(PartyNum, CountryCode) ->
+	#party_number{phone_number = DigitsIn, nature_of_addr_ind = Nature} = PartyNum,
+	CountryCodeLen = length(CountryCode),
+	case Nature of
+		?ISUP_ADDR_NAT_INTERNATIONAL ->
+			Pfx = lists:sublist(DigitsIn, CountryCodeLen),
+			if Pfx == CountryCode ->
+				DigitsOut = lists:sublist(DigitsIn, CountryCodeLen+1,
+							  length(DigitsIn)-CountryCodeLen),
+				NatureOut = ?ISUP_ADDR_NAT_NATIONAL,
+				io:format("Nationalize: ~p -> ~p~n", [DigitsIn, DigitsOut]);
+			   true ->
+				DigitsOut = DigitsIn,
+				NatureOut = Nature
+			end;
 		_ ->
 			DigitsOut = DigitsIn,
 			NatureOut = Nature
