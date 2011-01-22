@@ -22,7 +22,7 @@
 
 -module(sctp_handler).
 -author("Harald Welte <laforge@gnumonks.org>").
--export([init/5]).
+-export([init/5, handle_sctp/2]).
 
 -include_lib("kernel/include/inet.hrl").
 -include_lib("kernel/include/inet_sctp.hrl").
@@ -52,7 +52,7 @@ init(MscLocalIP, MscLocalPort, MscRemoteIP, StpRemoteIP, StpRemotePort) ->
 			msc_remote_ip = MscRemoteIP,
 			stp_sock = StpSock, stp_remote_ip = StpRemoteIP,
 			stp_remote_port = StpRemotePort},
-	loop(L).
+	{ok, L}.
 
 % initiate a connection to STP as a client
 initiate_stp_connection(#loop_data{stp_sock = Sock, stp_remote_ip = IP, stp_remote_port = Port}, Opts) ->
@@ -60,11 +60,12 @@ initiate_stp_connection(#loop_data{stp_sock = Sock, stp_remote_ip = IP, stp_remo
 	gen_sctp:connect(Sock, IP, Port, Opts ++ ?COMMON_SOCKOPTS).
 
 % main loop function
-loop(L = #loop_data{msc_sock=MscSock, msc_remote_ip=MscRemoteIp, msc_remote_port=MscRemotePort,
-		    stp_sock=StpSock, stp_remote_ip=StpRemoteIp, stp_remote_port=StpRemotePort}) ->
+handle_sctp(L = #loop_data{msc_sock=MscSock, msc_remote_ip=MscRemoteIp, msc_remote_port=MscRemotePort,
+		    stp_sock=StpSock, stp_remote_ip=StpRemoteIp, stp_remote_port=StpRemotePort},
+	    Sctp) ->
 	io:format("Entering receive loop ~p~n", [L]),
 	io:format("======================================================================~n"),
-	receive
+	case Sctp of
 		% MSC connect or disconnect
 		{sctp, MscSock, MscRemoteIp, Port, {ANC, SAC}}
 					when is_record(SAC, sctp_assoc_change) ->
@@ -120,7 +121,7 @@ loop(L = #loop_data{msc_sock=MscSock, msc_remote_ip=MscRemoteIp, msc_remote_port
 			io:format("OTHER ~p~n", [Other]),
 			NewL = L
 	end,
-	loop(NewL).
+	NewL.
 
 
 try_mangle(L, From, Data) ->
