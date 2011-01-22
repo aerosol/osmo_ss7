@@ -64,7 +64,7 @@ mangle_rx_mtp3(L, From, Mtp3 = #mtp3_msg{service_ind = Service}) ->
 	mangle_rx_mtp3_serv(L, From, Service, Mtp3).
 
 % mangle the ISUP content
-mangle_rx_mtp3_serv(L, From, ?MTP3_SERV_ISUP, Mtp3 = #mtp3_msg{payload = Payload}) ->
+mangle_rx_mtp3_serv(_L, From, ?MTP3_SERV_ISUP, Mtp3 = #mtp3_msg{payload = Payload}) ->
 	io:format("ISUP In: ~p~n", [Payload]),
 	Isup = isup_codec:parse_isup_msg(Payload),
 	io:format("ISUP Decode: ~p~n", [Isup]),
@@ -80,7 +80,7 @@ mangle_rx_mtp3_serv(L, From, ?MTP3_SERV_ISUP, Mtp3 = #mtp3_msg{payload = Payload
 		Mtp3#mtp3_msg{payload = Payload_out}
 	end;
 % mangle the SCCP content
-mangle_rx_mtp3_serv(L, From, ?MTP3_SERV_SCCP, Mtp3 = #mtp3_msg{payload = Payload}) ->
+mangle_rx_mtp3_serv(_L, _From, ?MTP3_SERV_SCCP, Mtp3 = #mtp3_msg{payload = Payload}) ->
 	Sccp = sccp_codec:parse_sccp_msg(Payload),
 	io:format("SCCP Decode: ~p~n", [Sccp]),
 	% FIXME
@@ -106,8 +106,9 @@ mangle_rx_isup_params(From, MsgType, Msg, ParListOut, [Par|ParList]) ->
 	mangle_rx_isup_params(From, MsgType, Msg, ParListOut++[ParOut], ParList).
 
 % manipulate phone numbers
-mangle_rx_isup_par(From, MsgType, Msg, {ParType, ParBody}) when
+mangle_rx_isup_par(From, MsgType, _Msg, {ParType, ParBody}) when
 					ParType == ?ISUP_PAR_CALLED_P_NUM;
+					ParType == ?ISUP_PAR_CONNECTED_NUM;
 					ParType == ?ISUP_PAR_CALLING_P_NUM ->
 	NewParBody = mangle_isup_number(From, MsgType, ParType, ParBody),
 	{ParType, NewParBody};
