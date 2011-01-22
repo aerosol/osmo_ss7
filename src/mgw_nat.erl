@@ -94,9 +94,8 @@ mangle_rx_mtp3_serv(_L, _From, _, Mtp3) ->
 % Actual mangling of the decoded ISUP messages 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
--define(MSRN_PFX_MSC,	[8,9,0,9,9]).
-%-define(MSRN_PFX_MSC,	[0,0,3,5,4,8,9,0,9,9]).
--define(MSRN_PFX_STP,	[9,2,9,9,4,2,0,0]).
+-define(MSRN_PFX_MSC,	[3,5,4,8,9,0,9,9]).
+-define(MSRN_PFX_STP,	[6,3,9,2,9,9,4,2,0,0]).
 -define(INTERN_PFX,	[6,3]).
 
 % iterate over list of parameters and call mangle_rx_isup_par() for each one
@@ -126,14 +125,10 @@ mangle_rx_isup(From, MsgType, Msg = #isup_msg{parameters = Params}) ->
 mangle_isup_number(from_stp, ?ISUP_MSGT_IAM, NumType, PartyNum) ->
 	case NumType of
 		?ISUP_PAR_CALLED_P_NUM ->
+			% First convert to international number, if it is national
+			Num1 = isup_party_internationalize(PartyNum, ?INTERN_PFX),
 			io:format("IAM MSRN rewrite (STP->MSC): "),
-			Num1 = isup_party_replace_prefix(PartyNum, ?MSRN_PFX_STP, ?MSRN_PFX_MSC),
-			% if there was no MSRN rewrite, internationalize it
-			if Num1 == PartyNum ->
-				isup_party_internationalize(Num1, ?INTERN_PFX);
-			   true ->
-				Num1
-			end;
+			isup_party_replace_prefix(Num1, ?MSRN_PFX_STP, ?MSRN_PFX_MSC);
 		_ ->
 			PartyNum
 	end;
@@ -144,11 +139,8 @@ mangle_isup_number(from_msc, MsgT, NumType, PartyNum) when MsgT == ?ISUP_MSGT_CO
 		?ISUP_PAR_CONNECTED_NUM ->
 			io:format("CON MSRN rewrite (MSC->STP): "),
 			Num1 = isup_party_replace_prefix(PartyNum, ?MSRN_PFX_MSC, ?MSRN_PFX_STP),
-			if Num1 == PartyNum ->
-				isup_party_nationalize(Num1, ?INTERN_PFX);
-			   true ->
-				Num1
-			end;
+			% Second: convert to national number, if it is international
+			isup_party_nationalize(Num1, ?INTERN_PFX);
 		_ ->
 			PartyNum
 	end;
