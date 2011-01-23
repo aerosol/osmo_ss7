@@ -43,6 +43,31 @@
 -define(SCCP_PNC_IMPORTANCE,			18).
 -define(SCCP_PNC_LONG_DATA,			19).
 
+% According to Q.713 Section 3.4.1
+-define(SCCP_GTI_NO_GT,		2#0000).
+-define(SCCP_GTI_NAT_ONLY,	2#0001).
+-define(SCCP_GTI_TT_ONLY,	2#0010).
+-define(SCCP_GTI_TT_NP_ENC,	2#0011).
+-define(SCCP_GTI_TT_NP_ENC_NAT,	2#0100).
+
+% According to Q.731 Section 3.4.2.2
+-define(SCCP_SSN_UNKNOWN,	2#000000000).
+-define(SCCP_SSN_SCCP_MGMT,	2#000000001).
+-define(SCCP_SSN_ITU_T,		2#000000010).
+-define(SCCP_SSN_ISUP,		2#000000011).
+-define(SCCP_SSN_OAM,		2#000000100).
+-define(SCCP_SSN_MAP,		2#000000101).
+-define(SCCP_SSN_HLR,		2#000000110).
+-define(SCCP_SSN_VLR,		2#000000111).
+-define(SCCP_SSN_MSC,		2#000001000).
+-define(SCCP_SSN_EIR,		2#000001001).
+-define(SCCP_SSN_AUC,		2#000001010).
+-define(SCCP_SSN_ISDN_SS,	2#000001011).
+-define(SCCP_SSN_RES_NAT,	2#000001100).
+-define(SCCP_SSN_BISDN,		2#000001101).
+-define(SCCP_SSN_TC_TEST,	2#000001110).
+
+
 
 % a single parsed SCCP message
 -record(sccp_msg, {
