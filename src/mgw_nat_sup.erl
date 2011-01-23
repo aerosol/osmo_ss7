@@ -37,6 +37,6 @@ start_link() ->
 	supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 init(_Arg) ->
-	MgwChild = {mgw_nat_usr, {mgw_nat_usr, start_link, ?SCTP_HDLR_ARGS},
+	MgwChild = {mgw_nat_usr, {mgw_nat_usr, start_link, [?SCTP_HDLR_ARGS]},
 		    permanent, 2000, worker, [mgw_nat_usr, sctp_handler, mgw_nat]},
 	{ok,{{one_for_all,1,1}, [MgwChild]}}.
