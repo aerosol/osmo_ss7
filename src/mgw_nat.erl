@@ -101,8 +101,47 @@ mangle_rx_mtp3_serv(_L, _From, _, Mtp3) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Actual mangling of the decoded SCCP messages
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+-define(REAL_HLR_GT,	[6,3,9,1,8,0,0,0,4,0,1,2]).
+-define(NAT_HLR_GT,	[3,5,4,8,9,0,0,0,7,1]).
+
+mangle_rx_called(from_stp, Addr = #sccp_addr{ssn = SSN,
+					     global_title = GT}) ->
+	case {SSN, GT#global_title.phone_number} of
+		{?SCCP_SSN_HLR, ?REAL_HLR_GT} ->
+			GTout = GT#global_title{phone_number = ?NAT_HLR_GT},
+			io:format("SCCP STP->MSC rewrite ~p~n", [GTout]),
+			Addr#sccp_addr{global_title = GTout};
+		_ ->
+			Addr
+	end;
+mangle_rx_called(_From, Addr) ->
+	Addr.
+
+mangle_rx_calling(from_msc, Addr = #sccp_addr{ssn = SSN,
+					     global_title = GT}) ->
+	case {SSN, GT#global_title.phone_number} of
+		{?SCCP_SSN_MSC, ?NAT_HLR_GT} ->
+			GTout = GT#global_title{phone_number = ?REAL_HLR_GT},
+			io:format("SCCP MSC->STP rewrite ~p~n", [GTout]),
+			Addr#sccp_addr{global_title = GTout};
+		_ ->
+			Addr
+	end;
+mangle_rx_calling(_From, Addr) ->
+	Addr.
+
+mangle_rx_sccp(From, ?SCCP_MSGT_UDT, Msg = #sccp_msg{parameters = Opts}) ->
+	CalledParty = proplists:get_value(called_party_addr, Opts),
+	CalledPartyNew = mangle_rx_called(From, CalledParty),
+	CallingParty = proplists:get_value(calling_party_addr, Opts),
+	CallingPartyNew = mangle_rx_calling(From, CallingParty),
+	Opts1 = lists:keyreplace(called_party_addr, 1, Opts,
+				 {called_party_addr, CalledPartyNew}),
+	Opts2 = lists:keyreplace(calling_party_addr, 1, Opts1,
+				 {calling_party_addr, CallingPartyNew}),
+	Msg#sccp_msg{parameters = Opts2};
 mangle_rx_sccp(_From, _MsgType, Msg) ->
-	% FIXME
 	Msg.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
