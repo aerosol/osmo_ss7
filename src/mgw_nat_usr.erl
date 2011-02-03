@@ -37,6 +37,7 @@ stop() ->
 %% Callback functions of the OTP behavior
 
 init(Params) ->
+	sccp_masq:init(),
 	apply(sctp_handler, init, Params).
 
 handle_cast(stop, LoopData) ->

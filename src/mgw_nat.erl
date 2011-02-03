@@ -85,11 +85,13 @@ mangle_rx_mtp3_serv(_L, From, ?MTP3_SERV_SCCP, Mtp3 = #mtp3_msg{payload = Payloa
 	{ok, Sccp} = sccp_codec:parse_sccp_msg(Payload),
 	io:format("SCCP Decode: ~p~n", [Sccp]),
 	SccpMangled = mangle_rx_sccp(From, Sccp#sccp_msg.msg_type, Sccp),
-	if SccpMangled == Sccp ->
+	SccpMasqued = sccp_masq:sccp_masq_msg(From, SccpMangled#sccp_msg.msg_type,
+					      SccpMangled),
+	if SccpMasqued == Sccp ->
 		Mtp3;
 	   true ->
-		io:format("SCCP Encode In: ~p~n", [SccpMangled]),
-		Payload_out = sccp_codec:encode_sccp_msg(SccpMangled),
+		io:format("SCCP Encode In: ~p~n", [SccpMasqued]),
+		Payload_out = sccp_codec:encode_sccp_msg(SccpMasqued),
 		io:format("SCCP Encode Out: ~p~n", [Payload_out]),
 		% return modified MTP3 payload
 		Mtp3#mtp3_msg{payload = Payload_out}
