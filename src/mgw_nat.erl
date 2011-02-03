@@ -80,15 +80,30 @@ mangle_rx_mtp3_serv(_L, From, ?MTP3_SERV_ISUP, Mtp3 = #mtp3_msg{payload = Payloa
 		Mtp3#mtp3_msg{payload = Payload_out}
 	end;
 % mangle the SCCP content
-mangle_rx_mtp3_serv(_L, _From, ?MTP3_SERV_SCCP, Mtp3 = #mtp3_msg{payload = Payload}) ->
-	Sccp = sccp_codec:parse_sccp_msg(Payload),
+mangle_rx_mtp3_serv(_L, From, ?MTP3_SERV_SCCP, Mtp3 = #mtp3_msg{payload = Payload}) ->
+	io:format("SCCP In: ~p~n", [Payload]),
+	{ok, Sccp} = sccp_codec:parse_sccp_msg(Payload),
 	io:format("SCCP Decode: ~p~n", [Sccp]),
-	% FIXME
-	Mtp3;
+	SccpMangled = mangle_rx_sccp(From, Sccp#sccp_msg.msg_type, Sccp),
+	if SccpMangled == Sccp ->
+		Mtp3;
+	   true ->
+		io:format("SCCP Encode In: ~p~n", [SccpMangled]),
+		Payload_out = sccp_codec:encode_sccp_msg(SccpMangled),
+		io:format("SCCP Encode Out: ~p~n", [Payload_out]),
+		% return modified MTP3 payload
+		Mtp3#mtp3_msg{payload = Payload_out}
+	end;
 % default: do nothing
 mangle_rx_mtp3_serv(_L, _From, _, Mtp3) ->
 	Mtp3.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Actual mangling of the decoded SCCP messages
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+mangle_rx_sccp(_From, _MsgType, Msg) ->
+	% FIXME
+	Msg.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Actual mangling of the decoded ISUP messages 
