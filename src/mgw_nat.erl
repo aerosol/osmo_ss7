@@ -102,14 +102,13 @@ mangle_rx_mtp3_serv(_L, _From, _, Mtp3) ->
 % Actual mangling of the decoded SCCP messages
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
--define(REAL_HLR_GT,	[6,3,9,1,8,0,0,0,4,0,1,2]).
--define(NAT_HLR_GT,	[3,5,4,8,9,0,0,0,7,1]).
-
 mangle_rx_called(from_stp, Addr = #sccp_addr{ssn = SSN,
 					     global_title = GT}) ->
+	{ok, RealHlrGt}  = application:get_env(real_hlr_gt),
+	{ok, NatHlrGt} = application:get_env(nat_hlr_gt),
 	case {SSN, GT#global_title.phone_number} of
-		{?SCCP_SSN_HLR, ?REAL_HLR_GT} ->
-			GTout = GT#global_title{phone_number = ?NAT_HLR_GT},
+		{?SCCP_SSN_HLR, RealHlrGt} ->
+			GTout = GT#global_title{phone_number = NatHlrGt},
 			io:format("SCCP STP->MSC rewrite ~p~n", [GTout]),
 			Addr#sccp_addr{global_title = GTout};
 		_ ->
@@ -120,9 +119,11 @@ mangle_rx_called(_From, Addr) ->
 
 mangle_rx_calling(from_msc, Addr = #sccp_addr{ssn = SSN,
 					     global_title = GT}) ->
+	{ok, RealHlrGt} = application:get_env(real_hlr_gt),
+	{ok, NatHlrGt} = application:get_env(nat_hlr_gt),
 	case {SSN, GT#global_title.phone_number} of
-		{?SCCP_SSN_MSC, ?NAT_HLR_GT} ->
-			GTout = GT#global_title{phone_number = ?REAL_HLR_GT},
+		{?SCCP_SSN_MSC, NatHlrGt} ->
+			GTout = GT#global_title{phone_number = RealHlrGt},
 			io:format("SCCP MSC->STP rewrite ~p~n", [GTout]),
 			Addr#sccp_addr{global_title = GTout};
 		_ ->
@@ -147,10 +148,6 @@ mangle_rx_sccp(_From, _MsgType, Msg) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Actual mangling of the decoded ISUP messages 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
--define(MSRN_PFX_MSC,	[3,5,4,8,9,0,9,9]).
--define(MSRN_PFX_STP,	[6,3,9,2,9,9,4,2,0,0]).
--define(INTERN_PFX,	[6,3]).
 
 % iterate over list of parameters and call mangle_rx_isup_par() for each one
 mangle_rx_isup_params(_From, _MsgType, _Msg, ParListOut, []) ->
@@ -181,9 +178,12 @@ mangle_isup_number(from_stp, ?ISUP_MSGT_IAM, NumType, PartyNum) ->
 	case NumType of
 		?ISUP_PAR_CALLED_P_NUM ->
 			% First convert to international number, if it is national
-			Num1 = isup_party_internationalize(PartyNum, ?INTERN_PFX),
+			Num1 = isup_party_internationalize(PartyNum,
+						application:get_env(intern_pfx)),
 			io:format("IAM MSRN rewrite (STP->MSC): "),
-			isup_party_replace_prefix(Num1, ?MSRN_PFX_STP, ?MSRN_PFX_MSC);
+			isup_party_replace_prefix(Num1,
+						application:get_env(msrn_pfx_stp),
+						application:get_env(msrn_pfx_msc));
 		_ ->
 			PartyNum
 	end;
@@ -193,9 +193,12 @@ mangle_isup_number(from_msc, MsgT, NumType, PartyNum) when MsgT == ?ISUP_MSGT_CO
 	case NumType of
 		?ISUP_PAR_CONNECTED_NUM ->
 			io:format("CON MSRN rewrite (MSC->STP): "),
-			Num1 = isup_party_replace_prefix(PartyNum, ?MSRN_PFX_MSC, ?MSRN_PFX_STP),
+			Num1 = isup_party_replace_prefix(PartyNum,
+						application:get_env(msrn_pfx_msc),
+						application:get_env(msrn_pfx_stp)),
 			% Second: convert to national number, if it is international
-			isup_party_nationalize(Num1, ?INTERN_PFX);
+			isup_party_nationalize(Num1,
+						application:get_env(intern_pfx));
 		_ ->
 			PartyNum
 	end;
@@ -203,7 +206,8 @@ mangle_isup_number(from_msc, MsgT, NumType, PartyNum) when MsgT == ?ISUP_MSGT_CO
 mangle_isup_number(from_msc, ?ISUP_MSGT_IAM, NumType, PartyNum) ->
 	case NumType of
 		?ISUP_PAR_CALLED_P_NUM ->
-			isup_party_nationalize(PartyNum, ?INTERN_PFX);
+			isup_party_nationalize(PartyNum,
+						applicaiton:get_env(intern_pfx));
 		_ ->
 			PartyNum
 	end;
@@ -212,7 +216,8 @@ mangle_isup_number(from_stp, MsgT, NumType, PartyNum) when MsgT == ?ISUP_MSGT_CO
 							   MsgT == ?ISUP_MSGT_ANM ->
 	case NumType of
 		?ISUP_PAR_CONNECTED_NUM ->
-			isup_party_internationalize(PartyNum, ?INTERN_PFX);
+			isup_party_internationalize(PartyNum,
+						application:get_env(intern_pfx));
 		_ ->
 			PartyNum
 	end;

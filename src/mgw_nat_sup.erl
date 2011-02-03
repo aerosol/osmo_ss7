@@ -24,19 +24,17 @@
 -export([start_link/0]).
 -export([init/1]).
 
--define(MSC_LOCAL_IP,		any).
--define(MSC_LOCAL_PORT,		2904).
--define(MSC_REMOTE_IP,		{172,16,1,81}).
--define(STP_REMOTE_IP,		{172,16,249,20}).
--define(STP_REMOTE_PORT,	2904).
-
--define(SCTP_HDLR_ARGS,	[?MSC_LOCAL_IP, ?MSC_LOCAL_PORT, ?MSC_REMOTE_IP,
-			 ?STP_REMOTE_IP, ?STP_REMOTE_PORT]).
-
 start_link() ->
 	supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 init(_Arg) ->
-	MgwChild = {mgw_nat_usr, {mgw_nat_usr, start_link, [?SCTP_HDLR_ARGS]},
+	{ok, MscLocalIp} = application:get_env(msc_local_ip),
+	{ok, MscLocalPort} = application:get_env(msc_local_port),
+	{ok, MscRemoteIp} = application:get_env(msc_remote_ip),
+	{ok, StpRemoteIp} = application:get_env(stp_remote_ip),
+	{ok, StpRemotePort} = application:get_env(stp_remote_port),
+	SctpHdlrArgs =	[MscLocalIp, MscLocalPort, MscRemoteIp,
+			 StpRemoteIp, StpRemotePort],
+	MgwChild = {mgw_nat_usr, {mgw_nat_usr, start_link, [SctpHdlrArgs]},
 		    permanent, 2000, worker, [mgw_nat_usr, sctp_handler, mgw_nat]},
 	{ok,{{one_for_all,1,1}, [MgwChild]}}.
