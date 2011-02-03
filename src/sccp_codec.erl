@@ -122,12 +122,13 @@ parse_sccp_msgt(?SCCP_MSGT_CR, DataBin) ->
 	<<PtrVar:8, PtrOpt:8, _/binary>> = RemainVar,
 	CalledPartyLen = binary:at(RemainVar, PtrVar),
 	CalledParty = binary:part(RemainVar, PtrVar+1, CalledPartyLen),
+	CalledPartyDec = parse_sccp_addr(CalledParty),
 	% optional part
 	OptBin = binary:part(RemainVar, 1 + PtrOpt, byte_size(RemainVar)-(1+PtrOpt)),
 	OptList = parse_sccp_opts(OptBin, []),
 	%OptList = [],
 	% build parsed list of message
-	[{src_local_ref, SrcLocalRef},{protocol_class, ProtoClass},{called_party_addr, CalledParty}|OptList];
+	[{src_local_ref, SrcLocalRef},{protocol_class, ProtoClass},{called_party_addr, CalledPartyDec}|OptList];
 parse_sccp_msgt(?SCCP_MSGT_CC, DataBin) ->
 	% first get the fixed part
 	<<_:8, DstLocalRef:24/big, SrcLocalRef:24/big, ProtoClass:8, Remain/binary >> = DataBin,
@@ -172,12 +173,14 @@ parse_sccp_msgt(?SCCP_MSGT_UDT, DataBin) ->
 	% variable part
 	CalledPartyLen = binary:at(Remain, CalledPartyPtr-3),
 	CalledParty = binary:part(Remain, CalledPartyPtr-3+1, CalledPartyLen),
+	CalledPartyDec = parse_sccp_addr(CalledParty),
 	CallingPartyLen = binary:at(Remain, CallingPartyPtr-2),
 	CallingParty = binary:part(Remain, CallingPartyPtr-2+1, CallingPartyLen),
+	CallingPartyDec = parse_sccp_addr(CallingParty),
 	DataLen = binary:at(Remain, DataPtr-1),
 	UserData = binary:part(Remain, DataPtr-1+1, DataLen),
-	[{protocol_class, ProtoClass},{called_party_addr, CalledParty},
-	 {calling_party_addr, CallingParty},{user_data, UserData}];
+	[{protocol_class, ProtoClass},{called_party_addr, CalledPartyDec},
+	 {calling_party_addr, CallingPartyDec},{user_data, UserData}];
 parse_sccp_msgt(?SCCP_MSGT_UDTS, DataBin) ->
 	parse_sccp_msgt(?SCCP_MSGT_UDT, DataBin);
 parse_sccp_msgt(?SCCP_MSGT_ED, DataBin) ->
@@ -210,6 +213,60 @@ parse_sccp_msg(DataBin) ->
 	{ok, #sccp_msg{msg_type = MsgType, parameters = Parsed}}.
 
 % Encoding Part
+
+encode_gt(#global_title{gti = GTind, phone_number = PhoneNum,
+			nature_of_addr_ind = Nature,
+			trans_type = TransType, encoding = Enc,
+			numbering_plan = NumPlan}) ->
+	case GTind of
+		?SCCP_GTI_NO_GT ->
+			{GTind, <<>>};
+		?SCCP_GTI_NAT_ONLY ->
+			% Figure 7/Q.713
+			{PhoneBin, OddEven} = isup_codec:encode_isup_party(PhoneNum),
+			{GTind, <<OddEven:1, Nature:7, PhoneBin/binary>>};
+		?SCCP_GTI_TT_ONLY ->
+			% Figure 9/Q.913
+			% Used in national interfaces only, we cannot parse Digits
+			{GTind, <<TransType:8, PhoneNum/binary>>};
+		?SCCP_GTI_TT_NP_ENC ->
+			% Figure 10/Q.713
+			{_Odd, PhoneBin} = isup_codec:encode_isup_party(PhoneNum),
+			{GTind, <<TransType:8, NumPlan:4, Enc:4, PhoneBin/binary>>};
+		?SCCP_GTI_TT_NP_ENC_NAT ->
+			% Figure 11/Q.713
+			{PhoneBin, _Odd} = isup_codec:encode_isup_party(PhoneNum),
+
+			{GTind, <<TransType:8, NumPlan:4, Enc:4, 0:1, Nature:7, PhoneBin/binary>>}
+	end.
+
+encode_pc(PointCode) ->
+	case PointCode of
+		undef ->
+			{0, <<>>};
+		_ ->
+			{1, <<PointCode:16/big>>}
+	end.
+
+encode_ssn(SSN) ->
+	case SSN of
+		undef ->
+			{0, <<>>};
+		_ ->
+			{1, <<SSN:8>>}
+	end.
+
+encode_sccp_addr(#sccp_addr{res_nat_use = ResNatUse,
+			    route_on_ssn = RoutInd,
+			    point_code = PointCode,
+			    ssn = SSN,
+			    global_title = GT}) ->
+
+	{GTind, GTbin} = encode_gt(GT),
+	{SSNind, SSNbin} = encode_ssn(SSN),
+	{PCind, PCbin} = encode_pc(PointCode),
+	<<ResNatUse:1, RoutInd:1, GTind:4, SSNind:1, PCind:1, PCbin/binary, SSNbin/binary, GTbin/binary>>.
+
 
 encode_sccp_opt({OptNum, {DataBinLen, DataBin}}) when is_integer(OptNum) ->
 	DataBinLen8 = DataBinLen*8,
@@ -272,17 +329,19 @@ encode_sccp_msgt(?SCCP_MSGT_AK, Params) ->
 encode_sccp_msgt(?SCCP_MSGT_UDT, Params) ->
 	ProtoClass = proplists:get_value(protocol_class, Params),
 	CalledParty = proplists:get_value(called_party_addr, Params),
-	CalledPartyLen = byte_size(CalledParty),
+	CalledPartyEnc = encode_sccp_addr(CalledParty),
+	CalledPartyLen = byte_size(CalledPartyEnc),
 	CallingParty = proplists:get_value(calling_party_addr, Params),
-	CallingPartyLen = byte_size(CallingParty),
+	CallingPartyEnc = encode_sccp_addr(CallingParty),
+	CallingPartyLen = byte_size(CallingPartyEnc),
 	UserData = proplists:get_value(user_data, Params),
 	UserDataLen = byte_size(UserData),
 	% variable part
 	CalledPartyPtr = 3,
 	CallingPartyPtr = 2 + (1 + CalledPartyLen),
 	DataPtr = 1 + (1 + CalledPartyLen) + (1 + CallingPartyLen),
-	Remain = <<CalledPartyLen:8, CalledParty/binary,
-		   CallingPartyLen:8, CallingParty/binary,
+	Remain = <<CalledPartyLen:8, CalledPartyEnc/binary,
+		   CallingPartyLen:8, CallingPartyEnc/binary,
 		   UserDataLen:8, UserData/binary>>,
 	<<?SCCP_MSGT_UDT:8, ProtoClass:8, CalledPartyPtr:8, CallingPartyPtr:8, DataPtr:8, Remain/binary>>;
 %encode_sccp_msgt(?SCCP_MSGT_UDTS, Params) ->
