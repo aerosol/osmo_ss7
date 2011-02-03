@@ -83,3 +83,21 @@
 	  spec_name,
 	  parameters
 	}).
+
+-record(global_title, {
+	  gti,
+	  nature_of_addr_ind,
+	  trans_type,
+	  encoding,
+	  numbering_plan,
+	  phone_number
+	}).
+
+-record(sccp_addr, {
+	  res_nat_use,
+	  route_on_ssn,
+	  point_code,		% optional
+	  ssn,			% optional
+	  global_title		% optional
+	}).
+

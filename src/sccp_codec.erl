@@ -25,28 +25,25 @@
 
 -compile(export_all).
 
-parse_point_code(BinPC, PCind, OptListIn) when is_binary(BinPC),
-						is_list(OptListIn) ->
+parse_point_code(BinPC, PCind) when is_binary(BinPC) ->
 	case PCind of
 		1 ->
-			<<PointCode:16/big, Remain/binary>> = BinPC,
-			OptListOut = OptListIn ++ [{point_code, PointCode}];
+			<<PointCode:16/big, Remain/binary>> = BinPC;
 		_ ->
 			Remain = BinPC,
-			OptListOut = OptListIn
+			PointCode = undef
 	end,
-	{Remain, OptListOut}.
+	{Remain, PointCode}.
 
-parse_ssn(BinSSN, SSNind, OptListIn) ->
+parse_ssn(BinSSN, SSNind) ->
 	case SSNind of
 		1 ->
-			<<SSN:8, Remain/binary>> = BinSSN,
-			OptListOut = OptListIn ++ [{ssn, SSN}];
+			<<SSN:8, Remain/binary>> = BinSSN;
 		_ ->
 			Remain = BinSSN,
-			OptListOut = OptListIn
+			SSN = undef
 	end,
-	{Remain, OptListOut}.
+	{Remain, SSN}.
 
 enc_is_odd(Enc) ->
 	case Enc of
@@ -54,49 +51,53 @@ enc_is_odd(Enc) ->
 		_ -> 0
 	end.
 
-parse_gt(BinGT, GTind, OptListIn) ->
+parse_gt(BinGT, GTind) ->
 	case GTind of
 		?SCCP_GTI_NO_GT ->
-			NewOpts = [];
+			undef;
 		?SCCP_GTI_NAT_ONLY ->
 			% Figure 7/Q.713
 			<<Odd:1, Nature:7, Digits/binary>> = BinGT,
 			PhoneNum = isup_codec:parse_isup_party(Digits, Odd),
-			NewOpts = [{nature_of_addr_ind, Nature},
-				   {phone_number, PhoneNum}];
+			#global_title{gti = GTind,
+				      nature_of_addr_ind = Nature,
+				      phone_number = PhoneNum};
 		?SCCP_GTI_TT_ONLY ->
 			% Figure 9/Q.913
 			<<TransType:8, Digits/binary>> = BinGT,
 			% Used in national interfaces only, we cannot parse Digits
-			NewOpts = [{trans_type, TransType}, {address, Digits}];
+			#global_title{gti = GTind,
+				      trans_type = TransType,
+				      phone_number = Digits};
 		?SCCP_GTI_TT_NP_ENC ->
 			% Figure 10/Q.713
 			<<TransType:8, NumPlan:4, Enc:4, Digits/binary>> = BinGT,
 			PhoneNum = isup_codec:parse_isup_party(Digits, enc_is_odd(Enc)),
-			NewOpts = [{trans_type, TransType}, {encoding, Enc},
-				   {numbering_plan, NumPlan},
-				   {phone_number, PhoneNum}];
+			#global_title{gti = GTind,
+				      trans_type = TransType, encoding = Enc, 
+				      numbering_plan = NumPlan,
+				      phone_number = PhoneNum};
 		?SCCP_GTI_TT_NP_ENC_NAT ->
 			% Figure 11/Q.713
 			<<TransType:8, NumPlan:4, Enc:4, 0:1, Nature:7, Digits/binary>> = BinGT,
 			PhoneNum = isup_codec:parse_isup_party(Digits, enc_is_odd(Enc)),
-			NewOpts = [{trans_type, TransType}, {encoding, Enc},
-				   {numbering_plan, NumPlan},
-				   {nature_of_addr_ind, Nature},
-				   {phone_number, PhoneNum}];
+			#global_title{gti = GTind,
+				      trans_type = TransType, encoding = Enc,
+				      numbering_plan = NumPlan,
+				      nature_of_addr_ind = Nature,
+				      phone_number = PhoneNum};
 		_ ->
-			NewOpts = [{unknown, BinGT}]
-	end,
-	OptListIn ++ [{global_title, GTind, NewOpts}].
+			BinGT
+	end.
 
 % parse SCCP Address
 parse_sccp_addr(BinAddr) when is_binary(BinAddr) ->
 	<<ResNatUse:1, RoutInd:1, GTind:4, SSNind:1, PCind:1, Remain/binary>> = BinAddr,
-	OptList = [{reserved_national_use, ResNatUse}, {route_on_ssn, RoutInd}],
-	{RemainPC, OptPC} = parse_point_code(Remain, PCind, OptList),
-	{RemainSSN, OptSSN} = parse_ssn(RemainPC, SSNind, OptPC),
-	OptGT = parse_gt(RemainSSN, GTind, OptSSN),
-	OptGT.
+	{RemainPC, OptPC} = parse_point_code(Remain, PCind),
+	{RemainSSN, OptSSN} = parse_ssn(RemainPC, SSNind),
+	OptGT = parse_gt(RemainSSN, GTind),
+	#sccp_addr{res_nat_use = ResNatUse, route_on_ssn = RoutInd,
+		   point_code = OptPC, ssn = OptSSN, global_title = OptGT}.
 
 % parse SCCP Optional Part
 parse_sccp_opt(OptType, OptLen, Content) ->
