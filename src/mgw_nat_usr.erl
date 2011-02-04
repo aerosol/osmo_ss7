@@ -23,7 +23,7 @@
 
 -behavior(gen_server).
 
--export([start_link/1, stop/0]).
+-export([start_link/1, stop/0, sccp_masq_reset/0]).
 -export([init/1, handle_cast/2, handle_info/2, terminate/2]).
 
 
@@ -33,6 +33,9 @@ start_link(Params) ->
 stop() ->
 	gen_server:cast(?MODULE, stop).
 
+sccp_masq_reset() ->
+	gen_server:cast(?MODULE, sccp_masq_reset).
+
 
 %% Callback functions of the OTP behavior
 
@@ -41,7 +44,11 @@ init(Params) ->
 	apply(sctp_handler, init, Params).
 
 handle_cast(stop, LoopData) ->
-	{stop, normal, LoopData}.
+	{stop, normal, LoopData};
+
+handle_cast(sccp_masq_reset, LoopData) ->
+	sccp_masq:reset(),
+	{noreply, LoopData}.
 
 terminate(_Reason, _LoopData) ->
 	ok.

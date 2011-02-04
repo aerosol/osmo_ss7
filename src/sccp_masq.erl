@@ -21,7 +21,7 @@
 -author('Harald Welte <laforge@gnumonks.org>').
 -include("sccp.hrl").
 
--export([sccp_masq_msg/3, init/0]).
+-export([sccp_masq_msg/3, init/0, reset/0]).
 
 -compile([export_all]).
 
@@ -144,3 +144,8 @@ init() ->
 	put(sccp_masq_orig, Orig),
 	put(sccp_masq_rev, Rev),
 	ok.
+
+reset() ->
+	io:format("SCCP MASQ: Deleting all MASQ state records~n"),
+	ets:delete_all_objects(get(sccp_masq_orig)),
+	ets:delete_all_objects(get(sccp_masq_rev)).
