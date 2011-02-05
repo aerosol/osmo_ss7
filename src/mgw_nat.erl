@@ -109,7 +109,7 @@ mangle_rx_called(from_stp, Addr = #sccp_addr{ssn = SSN,
 	{ok, RealHlrGt}  = application:get_env(real_hlr_gt),
 	{ok, NatHlrGt} = application:get_env(nat_hlr_gt),
 	case {SSN, GT#global_title.phone_number} of
-		{?SCCP_SSN_HLR, RealHlrGt} ->
+		{_, RealHlrGt} ->
 			GTout = GT#global_title{phone_number = NatHlrGt},
 			io:format("SCCP STP->MSC rewrite ~p~n", [GTout]),
 			Addr#sccp_addr{global_title = GTout};
@@ -124,7 +124,7 @@ mangle_rx_calling(from_msc, Addr = #sccp_addr{ssn = SSN,
 	{ok, RealHlrGt} = application:get_env(real_hlr_gt),
 	{ok, NatHlrGt} = application:get_env(nat_hlr_gt),
 	case {SSN, GT#global_title.phone_number} of
-		{?SCCP_SSN_MSC, NatHlrGt} ->
+		{_, NatHlrGt} ->
 			GTout = GT#global_title{phone_number = RealHlrGt},
 			io:format("SCCP MSC->STP rewrite ~p~n", [GTout]),
 			Addr#sccp_addr{global_title = GTout};
