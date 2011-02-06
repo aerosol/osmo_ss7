@@ -31,23 +31,6 @@
 	  last_access	% timestamp of last usage
 	}).
 
-% Convert a list of digits to an integer value
-digit_list2int(Int, []) ->
-	Int;
-digit_list2int(Int, [Digit|Tail]) ->
-	digit_list2int(Int*10 + Digit, Tail).
-digit_list2int(Digits) when is_list(Digits) ->
-	digit_list2int(0, Digits).
-
-% Convert an integer value into a list of decimal digits
-int2digit_list(0, Digits) when is_list(Digits) ->
-	Digits;
-int2digit_list(Int, Digits) when is_integer(Int), is_list(Digits) ->
-	Digit = Int rem 10,
-	int2digit_list(Int div 10, [Digit|Digits]).
-int2digit_list(Int) when is_integer(Int) ->
-	int2digit_list(Int, []).
-
 -define(MASQ_GT_BASE, 12340000).
 -define(MASQ_GT_MAX, 9999).
 
@@ -58,7 +41,7 @@ masq_try_alloc(_DigitsOrig, Offset) when Offset > ?MASQ_GT_MAX ->
 	undef;
 masq_try_alloc(DigitsOrig, Offset) ->
 	Try = ?MASQ_GT_BASE + Offset,
-	TryDigits = int2digit_list(Try),
+	TryDigits = osmo_util:int2digit_list(Try),
 	EtsRet = ets:insert_new(get(sccp_masq_orig),
 				#sccp_masq_rec{digits_in = DigitsOrig,
 					       digits_out = TryDigits}),
