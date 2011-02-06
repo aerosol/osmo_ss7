@@ -31,22 +31,21 @@
 	  last_access	% timestamp of last usage
 	}).
 
--define(MASQ_GT_BASE, 12340000).
--define(MASQ_GT_MAX, 9999).
-
 % alloc + insert a new masquerade state record in our tables
 masq_alloc(DigitsOrig) ->
-	masq_try_alloc(DigitsOrig, 0).
-masq_try_alloc(_DigitsOrig, Offset) when Offset > ?MASQ_GT_MAX ->
+	{ok, Base} = application:get_env(sccp_masq_gt_base),
+	{ok, Max} = application:get_env(sccp_masq_gt_max),
+	masq_try_alloc(DigitsOrig, Base, Max, 0).
+masq_try_alloc(_DigitsOrig, _Base, Max, Offset) when Offset > Max ->
 	undef;
-masq_try_alloc(DigitsOrig, Offset) ->
-	Try = ?MASQ_GT_BASE + Offset,
+masq_try_alloc(DigitsOrig, Base, Max, Offset) ->
+	Try = Base + Offset,
 	EtsRet = ets:insert_new(get(sccp_masq_orig),
 				#sccp_masq_rec{digits_in = DigitsOrig,
 					       digits_out = Try}),
 	case EtsRet of
 		false ->
-			masq_try_alloc(DigitsOrig, Offset+1);
+			masq_try_alloc(DigitsOrig, Base, Max, Offset+1);
 		_ ->
 			ets:insert(get(sccp_masq_rev),
 				   #sccp_masq_rec{digits_in = Try,

@@ -4,11 +4,15 @@
 	 {modules, [mgw_nat_app, mgw_nat_sup, mgw_nat_usr, mgw_nat]},
 	 {mod, {mgw_nat_app, []}},
 	 {env, [
-		% SCCP rewrite
+		% SCCP static rewrite rules
 		{sccp_rewrite_tbl, [
 			{ 12340000, 98760000, "HLR" },
 			{ 12340001, 98760001, "VLR" }
 		]},
+
+		% SCCP source masquerading pool
+		{sccp_masq_gt_base, 12340000},
+		{sccp_masq_gt_max, 9999},
 
 		% ISUP rewrite
 		{msrn_pfx_msc, 35489099},
