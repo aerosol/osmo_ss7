@@ -131,7 +131,7 @@ do_sccp_gt_rewrite(GT = #global_title{phone_number = PhoneNum}, from_msc, [Head|
 % mangle called address
 mangle_rx_called(from_stp, Addr = #sccp_addr{global_title = GT}) ->
 	{ok, RewriteTbl} = application:get_env(sccp_rewrite_tbl),
-	GTout = do_sccp_gt_rewrite(GT, 2, RewriteTbl),
+	GTout = do_sccp_gt_rewrite(GT, from_stp, RewriteTbl),
 	Addr#sccp_addr{global_title = GTout};
 mangle_rx_called(_From, Addr) ->
 	Addr.
@@ -139,7 +139,7 @@ mangle_rx_called(_From, Addr) ->
 % mangle calling address
 mangle_rx_calling(from_msc, Addr = #sccp_addr{global_title = GT}) ->
 	{ok, RewriteTbl} = application:get_env(sccp_rewrite_tbl),
-	GTout = do_sccp_gt_rewrite(GT, 1, RewriteTbl),
+	GTout = do_sccp_gt_rewrite(GT, from_msc, RewriteTbl),
 	Addr#sccp_addr{global_title = GTout};
 mangle_rx_calling(_From, Addr) ->
 	Addr.
