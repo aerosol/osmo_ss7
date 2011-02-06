@@ -104,33 +104,43 @@ mangle_rx_mtp3_serv(_L, _From, _, Mtp3) ->
 % Actual mangling of the decoded SCCP messages
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-mangle_rx_called(from_stp, Addr = #sccp_addr{ssn = SSN,
-					     global_title = GT}) ->
-	{ok, RealHlrGt}  = application:get_env(real_hlr_gt),
-	{ok, NatHlrGt} = application:get_env(nat_hlr_gt),
-	case {SSN, GT#global_title.phone_number} of
-		{_, RealHlrGt} ->
-			GTout = GT#global_title{phone_number = NatHlrGt},
-			io:format("SCCP STP->MSC rewrite ~p~n", [GTout]),
-			Addr#sccp_addr{global_title = GTout};
-		_ ->
-			Addr
+% iterate over list of rewrite tuples and apply translation if there is a match
+do_sccp_gt_rewrite(GT, _From, []) ->
+	GT;
+do_sccp_gt_rewrite(GT = #global_title{phone_number = PhoneNum}, from_stp, [Head|List]) ->
+	{MscSide, StpSide, Comment} = Head,
+	if PhoneNum == StpSide ->
+		NewPhoneNum = MscSide,
+		io:format("SCCP STP->MSC rewrite (~p) ~p -> ~p~n",
+			  [Comment, PhoneNum, NewPhoneNum]),
+		GT#global_title{phone_number = NewPhoneNum};
+	   true ->
+		do_sccp_gt_rewrite(GT, from_stp, List)
 	end;
+do_sccp_gt_rewrite(GT = #global_title{phone_number = PhoneNum}, from_msc, [Head|List]) ->
+	{MscSide, StpSide, Comment} = Head,
+	if PhoneNum == MscSide ->
+		NewPhoneNum = StpSide,
+		io:format("SCCP MSC->STP rewrite (~p) ~p -> ~p~n",
+			  [Comment, PhoneNum, NewPhoneNum]),
+		GT#global_title{phone_number = NewPhoneNum};
+	   true ->
+		do_sccp_gt_rewrite(GT, from_msc, List)
+	end.
+
+% mangle called address
+mangle_rx_called(from_stp, Addr = #sccp_addr{global_title = GT}) ->
+	{ok, RewriteTbl} = application:get_env(sccp_rewrite_tbl),
+	GTout = do_sccp_gt_rewrite(GT, 2, RewriteTbl),
+	Addr#sccp_addr{global_title = GTout};
 mangle_rx_called(_From, Addr) ->
 	Addr.
 
-mangle_rx_calling(from_msc, Addr = #sccp_addr{ssn = SSN,
-					     global_title = GT}) ->
-	{ok, RealHlrGt} = application:get_env(real_hlr_gt),
-	{ok, NatHlrGt} = application:get_env(nat_hlr_gt),
-	case {SSN, GT#global_title.phone_number} of
-		{_, NatHlrGt} ->
-			GTout = GT#global_title{phone_number = RealHlrGt},
-			io:format("SCCP MSC->STP rewrite ~p~n", [GTout]),
-			Addr#sccp_addr{global_title = GTout};
-		_ ->
-			Addr
-	end;
+% mangle calling address
+mangle_rx_calling(from_msc, Addr = #sccp_addr{global_title = GT}) ->
+	{ok, RewriteTbl} = application:get_env(sccp_rewrite_tbl),
+	GTout = do_sccp_gt_rewrite(GT, 1, RewriteTbl),
+	Addr#sccp_addr{global_title = GTout};
 mangle_rx_calling(_From, Addr) ->
 	Addr.
 
@@ -228,8 +238,10 @@ mangle_isup_number(from_msc, _, _, PartyNum) ->
 	PartyNum.
 
 % replace the prefix of PartyNum with NewPfx _if_ the current prefix matches MatchPfx
-isup_party_replace_prefix(PartyNum, MatchPfx, NewPfx) ->
-	DigitsIn = PartyNum#party_number.phone_number,
+isup_party_replace_prefix(PartyNum, MatchPfx, NewPfxInt) ->
+	IntIn = PartyNum#party_number.phone_number,
+	DigitsIn = osmo_util:int2digit_list(IntIn),
+	NewPfx = osmo_util:int2digit_list(NewPfxInt),
 	MatchPfxLen = length(MatchPfx),
 	Pfx = lists:sublist(DigitsIn, 1, MatchPfxLen),
 	if Pfx == MatchPfx ->
@@ -240,10 +252,12 @@ isup_party_replace_prefix(PartyNum, MatchPfx, NewPfx) ->
 		io:format("Prefix rewrite: NO MATCH (~p != ~p)~n", [Pfx, MatchPfx]),
 		DigitsOut = DigitsIn
 	end,
-	PartyNum#party_number{phone_number = DigitsOut}.
+	IntOut = osmo_util:digit_list2int(DigitsOut),
+	PartyNum#party_number{phone_number = IntOut}.
 
 isup_party_internationalize(PartyNum, CountryCode) ->
-	#party_number{phone_number = DigitsIn, nature_of_addr_ind = Nature} = PartyNum,
+	#party_number{phone_number = IntIn, nature_of_addr_ind = Nature} = PartyNum,
+	DigitsIn = osmo_util:int2digit_list(IntIn),
 	case Nature of
 		?ISUP_ADDR_NAT_NATIONAL ->
 			DigitsOut = CountryCode ++ DigitsIn,
@@ -253,10 +267,12 @@ isup_party_internationalize(PartyNum, CountryCode) ->
 			DigitsOut = DigitsIn,
 			NatureOut = Nature
 	end,
-	PartyNum#party_number{phone_number = DigitsOut, nature_of_addr_ind = NatureOut}.
+	IntOut = osmo_util:digit_list2int(DigitsOut),
+	PartyNum#party_number{phone_number = IntOut, nature_of_addr_ind = NatureOut}.
 
 isup_party_nationalize(PartyNum, CountryCode) ->
-	#party_number{phone_number = DigitsIn, nature_of_addr_ind = Nature} = PartyNum,
+	#party_number{phone_number = IntIn, nature_of_addr_ind = Nature} = PartyNum,
+	DigitsIn = osmo_util:int2digit_list(IntIn),
 	CountryCodeLen = length(CountryCode),
 	case Nature of
 		?ISUP_ADDR_NAT_INTERNATIONAL ->
@@ -274,4 +290,5 @@ isup_party_nationalize(PartyNum, CountryCode) ->
 			DigitsOut = DigitsIn,
 			NatureOut = Nature
 	end,
-	PartyNum#party_number{phone_number = DigitsOut, nature_of_addr_ind = NatureOut}.
+	IntOut = osmo_util:digit_list2int(DigitsOut),
+	PartyNum#party_number{phone_number = IntOut, nature_of_addr_ind = NatureOut}.
