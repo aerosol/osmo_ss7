@@ -5,14 +5,14 @@
 	 {mod, {mgw_nat_app, []}},
 	 {env, [
 		% SCCP rewrite
-		{sccp_rewrite_tbl, {[
+		{sccp_rewrite_tbl, [
 			{ 12340000, 98760000, "HLR" },
 			{ 12340001, 98760001, "VLR" }
 		]},
 
 		% ISUP rewrite
 		{msrn_pfx_msc, 35489099},
-		{msrn_pfx_stp, 6392994200]},
+		{msrn_pfx_stp, 6392994200},
 		{intern_pfx, 63},
 
 		% SCTP / IP config
