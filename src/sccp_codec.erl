@@ -214,9 +214,16 @@ parse_sccp_msg(DataBin) ->
 
 % Encoding Part
 
+gt_enc_by_odd(Odd) ->
+	if Odd == 1 ->
+		1;
+	   true ->
+		2
+	end.
+
 encode_gt(#global_title{gti = GTind, phone_number = PhoneNum,
 			nature_of_addr_ind = Nature,
-			trans_type = TransType, encoding = Enc,
+			trans_type = TransType, encoding = _EncOrig,
 			numbering_plan = NumPlan}) ->
 	case GTind of
 		?SCCP_GTI_NO_GT ->
@@ -231,12 +238,13 @@ encode_gt(#global_title{gti = GTind, phone_number = PhoneNum,
 			{GTind, <<TransType:8, PhoneNum/binary>>};
 		?SCCP_GTI_TT_NP_ENC ->
 			% Figure 10/Q.713
-			{_Odd, PhoneBin} = isup_codec:encode_isup_party(PhoneNum),
+			{PhoneBin, OddEven} = isup_codec:encode_isup_party(PhoneNum),
+			Enc = gt_enc_by_odd(OddEven),
 			{GTind, <<TransType:8, NumPlan:4, Enc:4, PhoneBin/binary>>};
 		?SCCP_GTI_TT_NP_ENC_NAT ->
 			% Figure 11/Q.713
-			{PhoneBin, _Odd} = isup_codec:encode_isup_party(PhoneNum),
-
+			{PhoneBin, OddEven} = isup_codec:encode_isup_party(PhoneNum),
+			Enc = gt_enc_by_odd(OddEven),
 			{GTind, <<TransType:8, NumPlan:4, Enc:4, 0:1, Nature:7, PhoneBin/binary>>}
 	end.
 
