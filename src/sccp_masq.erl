@@ -81,7 +81,7 @@ mangle_rx_calling(from_stp, Addr = #sccp_addr{global_title = GT}) ->
 			io:format("SCCP MASQ: Unable to rewrite in original direction (out of GT addrs?)~n"),
 			Addr;
 		_ ->
-			io:format("SCCP MASQ (STP->MSC) rewrite ~p~n", [GtReplace]),
+			io:format("SCCP MASQ (STP->MSC) rewrite ~p->~p~n", [GtOrig, GtReplace]),
 			GTout = GT#global_title{phone_number = GtReplace},
 			Addr#sccp_addr{global_title = GTout}
 	end;
@@ -96,7 +96,7 @@ mangle_rx_called(from_msc, Addr = #sccp_addr{global_title = GT}) ->
 			io:format("SCCP MASQ: Unable to rewrite in original direction (unknown GT ~p)~n", [GT]),
 			Addr;
 		_ ->
-			io:format("SCCP MASQ (MSC->STP) rewrite ~p~n", [GtReplace]),
+			io:format("SCCP MASQ (MSC->STP) rewrite ~p->~p~n", [GtOrig, GtReplace]),
 			GTout = GT#global_title{phone_number = GtReplace},
 			Addr#sccp_addr{global_title = GTout}
 	end;
