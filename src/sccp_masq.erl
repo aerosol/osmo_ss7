@@ -41,18 +41,17 @@ masq_try_alloc(_DigitsOrig, Offset) when Offset > ?MASQ_GT_MAX ->
 	undef;
 masq_try_alloc(DigitsOrig, Offset) ->
 	Try = ?MASQ_GT_BASE + Offset,
-	TryDigits = osmo_util:int2digit_list(Try),
 	EtsRet = ets:insert_new(get(sccp_masq_orig),
 				#sccp_masq_rec{digits_in = DigitsOrig,
-					       digits_out = TryDigits}),
+					       digits_out = Try}),
 	case EtsRet of
 		false ->
 			masq_try_alloc(DigitsOrig, Offset+1);
 		_ ->
 			ets:insert(get(sccp_masq_rev),
-				   #sccp_masq_rec{digits_in = TryDigits,
+				   #sccp_masq_rec{digits_in = Try,
 						  digits_out = DigitsOrig}),
-			TryDigits
+			Try
 	end.
 
 % lookup a masqerade state record
