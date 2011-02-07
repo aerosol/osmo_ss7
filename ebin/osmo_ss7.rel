@@ -1,0 +1,8 @@
+{release,
+ {"osmo_ss7", "1"},
+ {erts, "5.8"},
+ [{kernel, "2.14"},
+  {stdlib, "1.17"},
+  {sasl, "2.1.9.2"},
+  {osmo_ss7, "1"}]
+}.
