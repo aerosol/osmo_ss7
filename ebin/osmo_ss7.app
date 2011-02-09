@@ -11,7 +11,6 @@
 			sctp_handler
 		]},
 	 {registered, []},
-	 {mod, {ipa_proto, []}},
 	 {applications, []},
 	 {env, [
 	  ]}
