@@ -29,11 +29,10 @@ parse_isup_party(<<>>, OddEven, DigitList) ->
 	% in case of odd number of digits, we need to cut the last
 	case OddEven of
 		1 ->
-			L = lists:sublist(DigitList, length(DigitList)-1);
+			lists:sublist(DigitList, length(DigitList)-1);
 		0 ->
-			L = DigitList
-	end,
-	osmo_util:digit_list2int(L);
+			DigitList
+	end;
 parse_isup_party(BcdBin, OddEven, DigitList) ->
 	<<Second:4, First:4, Remain/binary>> = BcdBin,
 	NewDigits = [First, Second],
@@ -231,8 +230,10 @@ parse_isup_msg(DataBin) when is_binary(DataBin) ->
 
 
 % encode a phone number from a list of digits into the BCD binary sequence
-encode_isup_party(BcdInt) ->
+encode_isup_party(BcdInt) when is_integer(BcdInt) ->
 	BcdList = osmo_util:int2digit_list(BcdInt),
+	encode_isup_party(BcdList);
+encode_isup_party(BcdList) when is_list(BcdList) ->
 	encode_isup_party(BcdList, <<>>, length(BcdList)).
 encode_isup_party([], Bin, NumDigits) ->
 	case NumDigits rem 2 of
