@@ -21,7 +21,7 @@
 -author('Harald Welte <laforge@gnumonks.org>').
 -include("isup.hrl").
 
--export([parse_isup_msg/1, encode_isup_msg/1, parse_isup_party/2]).
+-export([parse_isup_msg/1, encode_isup_msg/1, parse_isup_party/2, encode_isup_party/1]).
 
 -compile(export_all).
 
