@@ -135,6 +135,9 @@ try_mangle(L, From, Data) ->
 		end.
 
 % handle incoming data on one of the SCTP sockets
+handle_rx_data(_L, From, SRInfo, Data) when is_binary(Data) ->
+	io:format("Unhandled Rx Data from SCTP from ~p: ~p, ~p~n", [From, SRInfo, Data]);
+
 handle_rx_data(L, From, SRInf = #sctp_sndrcvinfo{ppid = 2, 
 						 stream = Stream}, Data) when is_binary(Data) ->
 	DataOut = try_mangle(L, From, Data),
