@@ -86,7 +86,23 @@ tuple_walk(Path, Tpl, TupleCb) when is_list(Path), is_tuple(Tpl) ->
 	NewTpl = TupleCb(Path, Tpl),
 	[TplName|TplList] = tuple_to_list(NewTpl),
 	NewTplList = tuple_fieldlist_walk(Path, TplName, TplList, TupleCb),
-	list_to_tuple([TplName|NewTplList]).
+	list_to_tuple([TplName|NewTplList]);
+tuple_walk(Path, TplL, TupleCb) when is_list(Path), is_list(TplL) ->
+	tuple_walk_list(Path, TplL, TupleCb, []).
+
+tuple_walk_list(_Path, [], _TupleCb, OutList) ->
+	OutList;
+tuple_walk_list(Path, [Head|Tail], TupleCb, OutList) ->
+	if
+		is_tuple(Head) ->
+			NewHead = tuple_walk(Path, Head, TupleCb);
+		is_list(Head) ->
+			NewHead = tuple_walk(Path, Head, TupleCb);
+		true ->
+			NewHead = Head
+	end,
+	tuple_walk_list(Path, Tail, TupleCb, OutList++[NewHead]).
+
 
 tuple_fieldlist_walk(Path, TplName, FieldList, TupleCb) ->
 	tuple_fieldlist_walk(Path, TplName, FieldList, TupleCb, []).
@@ -96,6 +112,8 @@ tuple_fieldlist_walk(_Path, _TplName, [], _TplCb, OutList) ->
 tuple_fieldlist_walk(Path, TplName, [Head|List], TupleCb, OutList) ->
 	if
 		is_tuple(Head) ->
+			NewHead = tuple_walk(Path++[TplName], Head, TupleCb);
+		is_list(Head) ->
 			NewHead = tuple_walk(Path++[TplName], Head, TupleCb);
 		true ->
 			NewHead = Head
