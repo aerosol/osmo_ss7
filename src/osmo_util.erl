@@ -22,6 +22,7 @@
 
 -export([digit_list2int/1, int2digit_list/1]).
 -export([reload_config/0]).
+-export([tuple_walk/2, tuple_walk_print_cb/2]).
 
 % Convert a list of digits to an integer value
 digit_list2int(Int, []) ->
@@ -73,3 +74,35 @@ make_appl(App) when is_atom(App) ->
 	{error, _Reason} ->
 		lists:keyreplace(env, 1, AppList, {env, []})
 	end.
+
+
+% Walk a named tuple and (recursively) all its fields, call user-supplied
+% callback for each of them
+tuple_walk(Tpl, TupleCb) when is_tuple(Tpl), is_function(TupleCb) ->
+	tuple_walk([], Tpl, TupleCb).
+
+tuple_walk(Path, Tpl, TupleCb) when is_list(Path), is_tuple(Tpl) ->
+	% call Callback
+	NewTpl = TupleCb(Path, Tpl),
+	[TplName|TplList] = tuple_to_list(NewTpl),
+	NewTplList = tuple_fieldlist_walk(Path, TplName, TplList, TupleCb),
+	list_to_tuple([TplName|NewTplList]).
+
+tuple_fieldlist_walk(Path, TplName, FieldList, TupleCb) ->
+	tuple_fieldlist_walk(Path, TplName, FieldList, TupleCb, []).
+
+tuple_fieldlist_walk(_Path, _TplName, [], _TplCb, OutList) ->
+	OutList;
+tuple_fieldlist_walk(Path, TplName, [Head|List], TupleCb, OutList) ->
+	if
+		is_tuple(Head) ->
+			NewHead = tuple_walk(Path++[TplName], Head, TupleCb);
+		true ->
+			NewHead = Head
+	end,
+	tuple_fieldlist_walk(Path, TplName, List, TupleCb, OutList++[NewHead]).
+
+
+tuple_walk_print_cb(Path, Tpl) when is_list(Path), is_tuple(Tpl) ->
+	io:format("~p:~p~n", [Path, Tpl]),
+	Tpl.
