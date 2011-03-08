@@ -7,8 +7,7 @@
 			isup_codec,
 			m2ua_codec,
 			mtp3_codec,
-			sccp_codec, sccp_scoc,  sccp_scrc,
-			sctp_handler
+			sccp_codec, sccp_scoc,  sccp_scrc
 		]},
 	 {registered, []},
 	 {applications, []},
