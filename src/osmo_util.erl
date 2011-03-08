@@ -22,7 +22,7 @@
 
 -export([digit_list2int/1, int2digit_list/1]).
 -export([reload_config/0]).
--export([tuple_walk/2, tuple_walk_print_cb/2]).
+-export([tuple_walk/3, tuple_walk_print_cb/3]).
 
 % Convert a list of digits to an integer value
 digit_list2int(Int, []) ->
@@ -78,49 +78,52 @@ make_appl(App) when is_atom(App) ->
 
 % Walk a named tuple and (recursively) all its fields, call user-supplied
 % callback for each of them
-tuple_walk(Tpl, TupleCb) when is_tuple(Tpl), is_function(TupleCb) ->
-	tuple_walk([], Tpl, TupleCb).
+tuple_walk(Tpl, TupleCb, Args) when is_tuple(Tpl), is_function(TupleCb),
+				    is_list(Args) ->
+	tuple_walk([], Tpl, TupleCb, Args).
 
-tuple_walk(Path, Tpl, TupleCb) when is_list(Path), is_tuple(Tpl) ->
+tuple_walk(Path, Tpl, TupleCb, Args) when is_list(Path), is_tuple(Tpl),
+					  is_list(Args) ->
 	% call Callback
-	NewTpl = TupleCb(Path, Tpl),
+	NewTpl = TupleCb(Path, Tpl, Args),
 	[TplName|TplList] = tuple_to_list(NewTpl),
-	NewTplList = tuple_fieldlist_walk(Path, TplName, TplList, TupleCb),
+	NewTplList = tuple_fieldlist_walk(Path, TplName, TplList, TupleCb, Args),
 	list_to_tuple([TplName|NewTplList]);
-tuple_walk(Path, TplL, TupleCb) when is_list(Path), is_list(TplL) ->
-	tuple_walk_list(Path, TplL, TupleCb, []).
+tuple_walk(Path, TplL, TupleCb, Args) when is_list(Path), is_list(TplL),
+					   is_list(Args) ->
+	tuple_walk_list(Path, TplL, TupleCb, Args, []).
 
-tuple_walk_list(_Path, [], _TupleCb, OutList) ->
+tuple_walk_list(_Path, [], _TupleCb, _Args, OutList) ->
 	OutList;
-tuple_walk_list(Path, [Head|Tail], TupleCb, OutList) ->
+tuple_walk_list(Path, [Head|Tail], TupleCb, Args, OutList) ->
 	if
 		is_tuple(Head) ->
-			NewHead = tuple_walk(Path, Head, TupleCb);
+			NewHead = tuple_walk(Path, Head, TupleCb, Args);
 		is_list(Head) ->
-			NewHead = tuple_walk(Path, Head, TupleCb);
+			NewHead = tuple_walk(Path, Head, TupleCb, Args);
 		true ->
 			NewHead = Head
 	end,
-	tuple_walk_list(Path, Tail, TupleCb, OutList++[NewHead]).
+	tuple_walk_list(Path, Tail, TupleCb, Args, OutList++[NewHead]).
 
 
-tuple_fieldlist_walk(Path, TplName, FieldList, TupleCb) ->
-	tuple_fieldlist_walk(Path, TplName, FieldList, TupleCb, []).
+tuple_fieldlist_walk(Path, TplName, FieldList, TupleCb, Args) ->
+	tuple_fieldlist_walk(Path, TplName, FieldList, TupleCb, Args, []).
 
-tuple_fieldlist_walk(_Path, _TplName, [], _TplCb, OutList) ->
+tuple_fieldlist_walk(_Path, _TplName, [], _TplCb, _Args, OutList) ->
 	OutList;
-tuple_fieldlist_walk(Path, TplName, [Head|List], TupleCb, OutList) ->
+tuple_fieldlist_walk(Path, TplName, [Head|List], TupleCb, Args, OutList) ->
 	if
 		is_tuple(Head) ->
-			NewHead = tuple_walk(Path++[TplName], Head, TupleCb);
+			NewHead = tuple_walk(Path++[TplName], Head, TupleCb, Args);
 		is_list(Head) ->
-			NewHead = tuple_walk(Path++[TplName], Head, TupleCb);
+			NewHead = tuple_walk(Path++[TplName], Head, TupleCb, Args);
 		true ->
 			NewHead = Head
 	end,
-	tuple_fieldlist_walk(Path, TplName, List, TupleCb, OutList++[NewHead]).
+	tuple_fieldlist_walk(Path, TplName, List, TupleCb, Args, OutList++[NewHead]).
 
 
-tuple_walk_print_cb(Path, Tpl) when is_list(Path), is_tuple(Tpl) ->
+tuple_walk_print_cb(Path, Tpl, _Args) when is_list(Path), is_tuple(Tpl) ->
 	io:format("~p:~p~n", [Path, Tpl]),
 	Tpl.
