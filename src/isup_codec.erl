@@ -127,9 +127,9 @@ parse_isup_msgt(?ISUP_MSGT_CPG, Bin) ->
 % Table C-9	Circuit group reset acknowledgement
 parse_isup_msgt(?ISUP_MSGT_GRA, Bin) ->
 	% V: Range and status
-	<<PtrVar:8, Remain/binary>> = Bin,
-	RangStsLen = binary:at(Remain, PtrVar),
-	RangeStatus = binary:part(Remain, PtrVar+1, RangStsLen),
+	<<PtrVar:8, _Remain/binary>> = Bin,
+	RangStsLen = binary:at(Bin, PtrVar),
+	RangeStatus = binary:part(Bin, PtrVar+1, RangStsLen),
 	RangeStsTuple = {?ISUP_PAR_RANGE_AND_STATUS, {RangStsLen, RangeStatus}},
 	[RangeStsTuple];
 % Table C-11	Connect
@@ -210,16 +210,16 @@ parse_isup_msgt(M, Bin) when
 		<<CGMsgt:8, PtrVar:8, VarBin/binary>> = Bin,
 		FixedOpts = [{cg_supv_msgt, CGMsgt}],
 		% V: Range and status
-		RangStsLen = binary:at(VarBin, PtrVar),
-		RangeStatus = binary:part(VarBin, PtrVar+1, RangStsLen),
+		RangStsLen = binary:at(VarBin, PtrVar-1),
+		RangeStatus = binary:part(VarBin, PtrVar, RangStsLen),
 		VarOpts = [{?ISUP_PAR_RANGE_AND_STATUS, {RangStsLen, RangeStatus}}],
 		FixedOpts ++ VarOpts;
 % Table C-26	Circuit group reset
 parse_isup_msgt(?ISUP_MSGT_GRS, Bin) ->
-	<<PtrVar:8, VarBin/binary>> = Bin,
+	<<PtrVar:8, _VarBin/binary>> = Bin,
 	% V: Range without status
-	RangeLen = binary:at(VarBin, PtrVar),
-	Range = binary:part(VarBin, PtrVar+1, RangeLen),
+	RangeLen = binary:at(Bin, PtrVar),
+	Range = binary:part(Bin, PtrVar+1, RangeLen),
 	[{?ISUP_PAR_RANGE_AND_STATUS, {RangeLen, Range}}].
 
 
