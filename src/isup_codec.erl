@@ -298,7 +298,13 @@ encode_isup_optpar(ParNum, ParBody) ->
 
 % recursive function to encode all optional parameters
 encode_isup_opts([], OutBin) ->
-	<<OutBin/binary, 0:8>>;
+	% terminate with end-of-options, but only if we have options
+	case OutBin of
+		<<>> ->
+			OutBin;
+		_ ->
+			<<OutBin/binary, 0:8>>
+	end;
 encode_isup_opts([Opt|OptPropList], OutBin) ->
 	{OptType, OptBody} = Opt,
 	OptBin = encode_isup_optpar(OptType, OptBody),
@@ -315,7 +321,12 @@ encode_isup_msgt(M, #isup_msg{parameters = Params}) when
 	M == ?ISUP_MSGT_ANM;
 	M == ?ISUP_MSGT_RLC;
 	M == ?ISUP_MSGT_FOT ->
-		encode_isup_opts(Params);
+		OptBin = encode_isup_opts(Params),
+		case OptBin of
+			<<>> ->	PtrOpt = 0;
+			_    -> PtrOpt = 1
+		end,
+		<<PtrOpt:8, OptBin/binary>>;
 % Table C-5	Address complete
 encode_isup_msgt(?ISUP_MSGT_ACM, #isup_msg{parameters = Params}) ->
 	BackCallInd = proplists:get_value(backward_call_ind, Params),
