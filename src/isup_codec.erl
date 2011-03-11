@@ -162,11 +162,14 @@ parse_isup_msgt(?ISUP_MSGT_IAM, Bin) ->
 	end,
 	FixedOpts ++ VarOpts ++ Opts;
 % Table C-17	Release
-parse_isup_msgt(?ISUP_MSGT_REL, Bin) ->
-	<<PtrVar:8, PtrOpt:8, VarAndOpt/binary>> = Bin,
+% Table 26/Q.763: Confusion
+parse_isup_msgt(M, VarAndOpt) when
+		M == ?ISUP_MSGT_REL;
+		M == ?ISUP_MSGT_CFN ->
+	<<PtrVar:8, PtrOpt:8, _/binary>> = VarAndOpt,
 	% V: Cause indicators
-	CauseIndLen = binary:at(VarAndOpt, PtrVar-2),
-	CauseInd = binary:part(VarAndOpt, PtrVar-1, CauseIndLen),
+	CauseIndLen = binary:at(VarAndOpt, PtrVar),
+	CauseInd = binary:part(VarAndOpt, PtrVar+1, CauseIndLen),
 	VarOpts = [{?ISUP_PAR_CAUSE_IND, {CauseIndLen, CauseInd}}],
 	case PtrOpt of
 		0 ->
@@ -177,8 +180,8 @@ parse_isup_msgt(?ISUP_MSGT_REL, Bin) ->
 	end,
 	VarOpts ++ Opts;
 % Table C-19	Subsequent address
-parse_isup_msgt(?ISUP_MSGT_SAM, Bin) ->
-	<<PtrVar:8, PtrOpt:8, VarAndOpt/binary>> = Bin,
+parse_isup_msgt(?ISUP_MSGT_SAM, VarAndOpt) ->
+	<<PtrVar:8, PtrOpt:8, _/binary>> = VarAndOpt,
 	% V: Subsequent number
 	SubseqNumLen = binary:at(VarAndOpt, PtrVar),
 	SubsetNum = binary:part(VarAndOpt, PtrVar+1, SubseqNumLen),
@@ -371,7 +374,9 @@ encode_isup_msgt(?ISUP_MSGT_IAM, #isup_msg{parameters = Params}) ->
 	end,
 	<<FixedBin/binary, PtrVar:8, PtrOpt:8, CalledPartyLen:8, CalledParty/binary, OptBin/binary>>;
 % Table C-17	Release
-encode_isup_msgt(?ISUP_MSGT_REL, #isup_msg{parameters = Params}) ->
+encode_isup_msgt(Msgt, #isup_msg{parameters = Params}) when
+						Msgt == ?ISUP_MSGT_REL;
+						Msgt == ?ISUP_MSGT_CFN ->
 	PtrVar = 2, % one byte behind the PtrOpt
 	% V: Cause indicators
 	CauseInd = encode_isup_par(?ISUP_PAR_CAUSE_IND,
