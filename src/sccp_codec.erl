@@ -182,7 +182,18 @@ parse_sccp_msgt(?SCCP_MSGT_UDT, DataBin) ->
 	[{protocol_class, ProtoClass},{called_party_addr, CalledPartyDec},
 	 {calling_party_addr, CallingPartyDec},{user_data, UserData}];
 parse_sccp_msgt(?SCCP_MSGT_UDTS, DataBin) ->
-	parse_sccp_msgt(?SCCP_MSGT_UDT, DataBin);
+	<<_:8, ReturnCause:8, CalledPartyPtr:8, CallingPartyPtr:8, DataPtr:8, Remain/binary >> = DataBin,
+	% variable part
+	CalledPartyLen = binary:at(Remain, CalledPartyPtr-3),
+	CalledParty = binary:part(Remain, CalledPartyPtr-3+1, CalledPartyLen),
+	CalledPartyDec = parse_sccp_addr(CalledParty),
+	CallingPartyLen = binary:at(Remain, CallingPartyPtr-2),
+	CallingParty = binary:part(Remain, CallingPartyPtr-2+1, CallingPartyLen),
+	CallingPartyDec = parse_sccp_addr(CallingParty),
+	DataLen = binary:at(Remain, DataPtr-1),
+	UserData = binary:part(Remain, DataPtr-1+1, DataLen),
+	[{return_cause, ReturnCause},{called_party_addr, CalledPartyDec},
+	 {calling_party_addr, CallingPartyDec},{user_data, UserData}];
 parse_sccp_msgt(?SCCP_MSGT_ED, DataBin) ->
 	<<_:8, DstLocalRef:24/big, DataPtr:8, Remain/binary>> = DataBin,
 	DataLen = binary:at(Remain, DataPtr-1),
@@ -352,8 +363,24 @@ encode_sccp_msgt(?SCCP_MSGT_UDT, Params) ->
 		   CallingPartyLen:8, CallingPartyEnc/binary,
 		   UserDataLen:8, UserData/binary>>,
 	<<?SCCP_MSGT_UDT:8, ProtoClass:8, CalledPartyPtr:8, CallingPartyPtr:8, DataPtr:8, Remain/binary>>;
-%encode_sccp_msgt(?SCCP_MSGT_UDTS, Params) ->
-	% FIXME !!!
+encode_sccp_msgt(?SCCP_MSGT_UDTS, Params) ->
+	ReturnCause = proplists:get_value(return_cause, Params),
+	CalledParty = proplists:get_value(called_party_addr, Params),
+	CalledPartyEnc = encode_sccp_addr(CalledParty),
+	CalledPartyLen = byte_size(CalledPartyEnc),
+	CallingParty = proplists:get_value(calling_party_addr, Params),
+	CallingPartyEnc = encode_sccp_addr(CallingParty),
+	CallingPartyLen = byte_size(CallingPartyEnc),
+	UserData = proplists:get_value(user_data, Params),
+	UserDataLen = byte_size(UserData),
+	% variable part
+	CalledPartyPtr = 3,
+	CallingPartyPtr = 2 + (1 + CalledPartyLen),
+	DataPtr = 1 + (1 + CalledPartyLen) + (1 + CallingPartyLen),
+	Remain = <<CalledPartyLen:8, CalledPartyEnc/binary,
+		   CallingPartyLen:8, CallingPartyEnc/binary,
+		   UserDataLen:8, UserData/binary>>,
+	<<?SCCP_MSGT_UDTS:8, ReturnCause:8, CalledPartyPtr:8, CallingPartyPtr:8, DataPtr:8, Remain/binary>>;
 encode_sccp_msgt(?SCCP_MSGT_ED, Params) ->
 	DstLocalRef = proplists:get_value(dst_local_ref, Params),
 	UserData = proplists:get_value(user_data, Params),
