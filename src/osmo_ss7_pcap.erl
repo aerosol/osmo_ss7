@@ -27,29 +27,35 @@
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("epcap/include/epcap_net.hrl").
 
+-record(loop_data, {
+		args,
+		pkt_nr
+	}).
+
 pcap_apply(File, Filter, Args) ->
 	epcap:start([{file, File}, {filter, Filter}]),
-	loop(Args).
+	loop(#loop_data{args = Args, pkt_nr = 1}).
 
-loop(Args) ->
+loop(L = #loop_data{args=Args, pkt_nr = PktNr}) ->
 	receive
 		[{pkthdr, {_,_,_,{datalink,Datalink}}}, {packet, Packet}] ->
 			Decaps = epcap_net:decapsulate_dlt(Datalink, Packet),
-			handle_pkt_cb(Decaps, Args),
-			loop(Args);
+			handle_pkt_cb(PktNr, Decaps, Args),
+			loop(L#loop_data{pkt_nr = PktNr+1});
 		{epcap, eof} ->
 			?debugFmt("EOF from PCAP~n", []),
-			epcap:stop();
-		Default ->
+			epcap:stop(),
+			{ok, PktNr-1};
+		_Default ->
 			?debugFmt("Unknown ~p from PCAP~n", [Default])
 	end.
 
-
-handle_pkt_cb([Ether, IP, Hdr, Payload], Args) ->
+handle_pkt_cb(PktNr, [Ether, IP, Hdr, Payload], Args) ->
 	?debugFmt("~p:~n  ~p/~p~n", [IP, Hdr, Payload]),
 	case Hdr of
 		#sctp{chunks = Chunks} ->
-			handle_sctp_chunks(Chunks, [Ether, IP, Hdr], Args);
+			Path = [{epcap_pkt_nr, PktNr}, Ether, IP, Hdr],
+			handle_sctp_chunks(Chunks, Path, Args);
 		_ ->
 			ok
 	end.

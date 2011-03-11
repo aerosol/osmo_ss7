@@ -36,7 +36,8 @@ pcap_parse_test() ->
 	File = "../priv/isup.pcap",
 	case file:read_file_info(File) of
 		{ok, _Info} ->
-			osmo_ss7_pcap:pcap_apply("../priv/isup.pcap", "", Args);
+			{ok, NrPkts} = osmo_ss7_pcap:pcap_apply("../priv/isup.pcap", "", Args),
+			?debugFmt("Parsed ~p PCAP packets~n", [NrPkts]);
 		{error, _Reason} ->
 			?debugFmt("Skipping PCAP based tests as no ~p could be found~n",
 				  [File])
