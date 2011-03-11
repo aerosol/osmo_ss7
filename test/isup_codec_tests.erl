@@ -4,7 +4,11 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -include("isup.hrl").
+-include("m2ua.hrl").
+-include("mtp3.hrl").
 
+
+% individual message encode/decode tests
 
 -define(ISUP_GRS_BIN, <<1,0,23,1,1,14>>).
 -define(ISUP_GRS_DEC, #isup_msg{msg_type = 23,cic = 1, parameters = [{22,{1,<<14>>}}]}).
@@ -24,3 +28,37 @@ iam_dec_test() ->
 	?assertEqual(?ISUP_IAM_DEC, isup_codec:parse_isup_msg(?ISUP_IAM_BIN)).
 iam_enc_test() ->
 	?assertEqual(?ISUP_IAM_BIN, isup_codec:encode_isup_msg(?ISUP_IAM_DEC)).
+
+
+% parser test for real-world ISUP data
+pcap_parse_test() ->
+	Args = [{rewrite_fn, fun pcap_cb/5}],
+	File = "../priv/isup.pcap",
+	case file:read_file_info(File) of
+		{ok, _Info} ->
+			osmo_ss7_pcap:pcap_apply("../priv/isup.pcap", "", Args);
+		{error, _Reason} ->
+			?debugFmt("Skipping PCAP based tests as no ~p could be found~n",
+				  [File])
+	end.
+
+pcap_cb(sctp, _From, _Path, 2, DataBin) ->
+	{ok, M2ua} = m2ua_codec:parse_m2ua_msg(DataBin),
+	handle_m2ua(M2ua).
+
+handle_m2ua(#m2ua_msg{msg_class = ?M2UA_MSGC_MAUP,
+		      msg_type = ?M2UA_MAUP_MSGT_DATA,
+		      parameters = Params}) ->
+	{_Len, M2uaPayload} = proplists:get_value(16#300, Params),
+	Mtp3 = mtp3_codec:parse_mtp3_msg(M2uaPayload),
+	handle_mtp3(Mtp3);
+handle_m2ua(#m2ua_msg{}) ->
+	ok.
+
+handle_mtp3(#mtp3_msg{service_ind = ?MTP3_SERV_ISUP,
+		      payload = Payload}) ->
+	#isup_msg{} = IsupDec = isup_codec:parse_isup_msg(Payload),
+	IsupEnc = isup_codec:encode_isup_msg(IsupDec),
+	?assertEqual(Payload, IsupEnc);
+handle_mtp3(#mtp3_msg{}) ->
+	ok.
