@@ -194,7 +194,7 @@ parse_isup_msgt(Msgt, Bin) when Msgt == ?ISUP_MSGT_RES; Msgt == ?ISUP_MSGT_SUS -
 	<<SuspResInd:8, Remain/binary>> = Bin,
 	FixedOpts = [{susp_res_ind, SuspResInd}],
 	Opts = parse_isup_opts_ptr(Remain),
-	[FixedOpts|Opts];
+	FixedOpts ++ Opts;
 % Table C-23
 parse_isup_msgt(M, <<>>) when
 	M == ?ISUP_MSGT_BLO;
