@@ -25,6 +25,9 @@
 
 -compile(export_all).
 
+-compile({parse_transform, exprecs}).
+-export_records([party_number, isup_msg]).
+
 parse_isup_party(<<>>, OddEven, DigitList) ->
 	% in case of odd number of digits, we need to cut the last
 	case OddEven of

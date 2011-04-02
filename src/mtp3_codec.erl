@@ -23,6 +23,9 @@
 
 -export([parse_mtp3_msg/1, encode_mtp3_msg/1]).
 
+-compile({parse_transform, exprecs}).
+-export_records([mtp3_routing_label, mtp3_msg]).
+
 % Parse standard routing label according to Section 2.2 of ITU-T Q.704
 parse_mtp3_routing_label(_, LabelBin) when is_binary(LabelBin) ->
 	<<Sls:4/big, Opc:14/big, Dpc:14/big, Remain/binary>> = LabelBin,

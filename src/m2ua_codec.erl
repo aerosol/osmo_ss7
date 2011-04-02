@@ -23,6 +23,9 @@
 
 -export([parse_m2ua_msg/1, encode_m2ua_msg/1]).
 
+-compile({parse_transform, exprecs}).
+-export_records([m2ua_msg]).
+
 % compute the number of pad bits required after a binary parameter
 get_num_pad_bytes(BinLenBytes) ->
 	case BinLenBytes rem 4 of
