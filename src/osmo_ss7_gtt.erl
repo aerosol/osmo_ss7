@@ -126,9 +126,13 @@ gtt_action(Gt, Action) when is_record(Gt, global_title), is_record(Action, gtt_a
 	Gt#global_title{phone_number = Header ++ NewDigits ++ Trailer};
 
 % Execute a single action: Replac the numbering plan in the GT
-gtt_action(Gt,Action) when is_record(Gt, global_title), is_record(Action, gtt_act_repl_num_plan) ->
-	NewNumPlan = Action#gtt_act_repl_num_plan.numbering_plan,
-	Gt#global_title{numbering_plan = NewNumPlan}.
+gtt_action(Gt, #gtt_act_repl_num_plan{numbering_plan = NewNumPlan}) when is_record(Gt, global_title) ->
+	Gt#global_title{numbering_plan = NewNumPlan};
+
+% Execute a single 'generic purpose' action that will call apply/2
+gtt_action(Gt, #gtt_act_apply{funct = Funct, args = Args}) when is_record(Gt, global_title) ->
+	apply(Funct, Args).
+
 
 % appliy a list of GTT actions to a Global Title
 apply_gtt_actions(Gt, []) when is_record(Gt, global_title) ->

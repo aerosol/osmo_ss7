@@ -18,3 +18,9 @@
 -record(gtt_act_repl_num_plan, {
 	 numbering_plan
 	}).
+
+% GTT action for a generic apply/3 call
+-record(gtt_act_apply, {
+	 funct,
+	 args
+	}).
