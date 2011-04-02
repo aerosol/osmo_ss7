@@ -25,6 +25,9 @@
 
 -compile(export_all).
 
+-compile({parse_transform, exprecs}).
+-export_records([global_title, primitive, sccp_addr, sccp_msg]).
+
 parse_point_code(BinPC, PCind) when is_binary(BinPC) ->
 	case PCind of
 		1 ->
