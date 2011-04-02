@@ -46,6 +46,8 @@ parse_m3ua_msg(Data) when is_list(Data) ->
 parse_m3ua_opts(OptBin) when is_binary(OptBin) ->
 	parse_m3ua_opts(OptBin, []).
 
+parse_m3ua_opts(<<>>, OptList) when is_list(OptList) ->
+	OptList;
 parse_m3ua_opts(OptBin, OptList) when is_binary(OptBin), is_list(OptList) ->
 	<<Tag:16/big, Length:16/big, Remain/binary>> = OptBin,
 	PadLen = get_num_pad_bytes(Length),
