@@ -25,6 +25,9 @@
 
 -export([global_title_match/2, apply_gtt_actions/2, execute_gtt/2]).
 
+-compile({parse_transform, exprecs}).
+-export_records([gtt_match, gtt_act_repl_digits, gtt_act_repl_num_plan]).
+
 % Match a given GT against an ordered list of {match, action} tuples
 global_title_match([], Gt) when is_record(Gt, global_title) ->
 	false;
