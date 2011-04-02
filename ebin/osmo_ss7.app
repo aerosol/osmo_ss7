@@ -8,6 +8,7 @@
 			m2ua_codec,
 			mtp3_codec,
 			sccp_codec, sccp_scoc,  sccp_scrc,
+			osmo_ss7_gtt,
 			osmo_ss7_pcap
 		]},
 	 {registered, []},
