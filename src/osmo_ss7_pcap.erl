@@ -46,7 +46,7 @@ loop(L = #loop_data{args=Args, pkt_nr = PktNr}) ->
 			?debugFmt("EOF from PCAP~n", []),
 			epcap:stop(),
 			{ok, PktNr-1};
-		_Default ->
+		Default ->
 			?debugFmt("Unknown ~p from PCAP~n", [Default])
 	end.
 
@@ -65,10 +65,10 @@ handle_sctp_chunks([], _Path, _Args) ->
 handle_sctp_chunks([Head|Tail], Path, Args) ->
 	RewriteFn = proplists:get_value(rewrite_fn, Args),
 	case Head of
-		#sctp_chunk{type = 0, payload=#sctp_chunk_data{ppi=2, data=Data}} ->
+		#sctp_chunk{type = 0, payload=#sctp_chunk_data{ppi=Ppi, data=Data}} ->
 			%mgw_nat:mangle_rx_data(l, from_stp, Data, fun handle_rewrite_cb/5);
 			put(rewrite_cb, RewriteFn),
-			shim_rw_actor(sctp, from_msc, Path, 2, Data);
+			shim_rw_actor(sctp, from_msc, Path, Ppi, Data);
 		_ ->
 			ok
 	end,
