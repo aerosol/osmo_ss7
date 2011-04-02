@@ -1,7 +1,7 @@
 {application, osmo_ss7,
 	[{description, "Osmocom SS7 code"},
 	 {vsn, "1"},
-	 {modules, [	osmo_util,
+	 {modules, [	osmo_util, exprecs,
 			ipa_proto, 
 			bssmap_codec,
 			isup_codec,
