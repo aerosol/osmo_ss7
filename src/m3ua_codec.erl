@@ -1,0 +1,74 @@
+% M3UA in accordance with RFC4666 (http://tools.ietf.org/html/rfc4666)
+
+% (C) 2011 by Harald Welte <laforge@gnumonks.org>
+%
+% All Rights Reserved
+%
+% This program is free software; you can redistribute it and/or modify
+% it under the terms of the GNU Affero General Public License as
+% published by the Free Software Foundation; either version 3 of the
+% License, or (at your option) any later version.
+%
+% This program is distributed in the hope that it will be useful,
+% but WITHOUT ANY WARRANTY; without even the implied warranty of
+% MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+% GNU General Public License for more details.
+%
+% You should have received a copy of the GNU Affero General Public License
+% along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+-module(m3ua_codec).
+-author('Harald Welte <laforge@gnumonks.org>').
+-include("m3ua.hrl").
+
+-export([parse_m3ua_msg/1, encode_m3ua_msg/1]).
+
+%-compile(export_all).
+
+-compile({parse_transform, exprecs}).
+-export_records([m3ua_msg]).
+
+% compute the number of pad bits required after a binary parameter
+get_num_pad_bytes(BinLenBytes) ->
+	case BinLenBytes rem 4 of
+		0 ->    0;
+		Val ->  4 - Val
+	end.
+
+parse_m3ua_msg(DataBin) when is_binary(DataBin) ->
+	<<Version:8, _Reserved:8, MsgClass:8, MsgType:8, MsgLen:32/big, Remain/binary>> = DataBin,
+	OptList = parse_m3ua_opts(Remain),
+	#m3ua_msg{version = Version, msg_class = MsgClass, msg_type = MsgType,
+		  msg_length = MsgLen-4, payload = OptList};
+parse_m3ua_msg(Data) when is_list(Data) ->
+	parse_m3ua_msg(list_to_binary(Data)).
+
+parse_m3ua_opts(OptBin) when is_binary(OptBin) ->
+	parse_m3ua_opts(OptBin, []).
+
+parse_m3ua_opts(OptBin, OptList) when is_binary(OptBin), is_list(OptList) ->
+	<<Tag:16/big, Length:16/big, Remain/binary>> = OptBin,
+	PadLen = get_num_pad_bytes(Length),
+	LengthNet = Length - 4,
+	<<CurOpt:LengthNet/binary, 0:PadLen/integer-unit:8, Remain2/binary>> = Remain,
+	parse_m3ua_opts(Remain2, OptList ++ [{Tag, CurOpt}]).
+
+encode_m3ua_msg(#m3ua_msg{version = Version, msg_class = MsgClass,
+			  msg_type = MsgType, payload = OptList}) ->
+	OptBin = encode_m3ua_opts(OptList),
+	MsgLen = length(OptBin) + 8,
+	<<Version:4, 0:8, MsgClass:8, MsgType:8, MsgLen:32/big, OptBin/binary>>.
+
+encode_m3ua_opts(OptList) when is_list(OptList) ->
+	encode_m3ua_opts(OptList, <<>>).
+
+encode_m3ua_opts([], Bin) ->
+	Bin;
+encode_m3ua_opts([Head|Tail], Bin) ->
+	OptBin = encode_m3ua_opt(Head),
+	encode_m3ua_opts(Tail, <<Bin/binary, OptBin/binary>>).
+
+encode_m3ua_opt({Iei, Data}) when is_integer(Iei), is_binary(Data) ->
+	Length = length(Data) + 4,
+	PadLen = get_num_pad_bytes(Length),
+	<<Iei:16/big, Length:16/big, 0:PadLen/integer-unit:8, Data/binary>>.
