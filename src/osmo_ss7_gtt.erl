@@ -29,7 +29,7 @@
 -export_records([gtt_match, gtt_act_repl_digits, gtt_act_repl_num_plan]).
 
 % Match a given GT against an ordered list of {match, action} tuples
-global_title_match([], Gt) when is_record(Gt, global_title) ->
+global_title_match([], _Gt) ->
 	false;
 global_title_match([{Match, Action}|Tail], Gt) when is_record(Gt, global_title) ->
 	PhoneNumInt = osmo_util:digit_list2int(Gt#global_title.phone_number),
@@ -44,18 +44,47 @@ global_title_match([{Match, Action}|Tail], Gt) when is_record(Gt, global_title) 
 			% iterate further over the list of GTT rules
 			global_title_match(Tail, Gt)
 		end
+	end;
+% Same as above, but for SCCP Address (i.e. GT + point code and SSN)
+global_title_match([{Match, Action}|Tail], SccpAddr) when is_record(SccpAddr, sccp_addr) ->
+	Gt = SccpAddr#sccp_addr.global_title,
+	PhoneNumInt = osmo_util:digit_list2int(Gt#global_title.phone_number),
+	if Match#gtt_match.gt_range_from >= PhoneNumInt ->
+		% in an ordered list, we can assume that no trailing rules will match
+		false;
+	   true ->
+		case single_gt_match(Match, SccpAddr) of
+		    true ->
+			Action;
+		    _ ->
+			% iterate further over the list of GTT rules
+			global_title_match(Tail, SccpAddr)
+		end
 	end.
+
 
 % perform matching of a given global title against a single match
 single_gt_match(Match, Gt) when is_record(Match, gtt_match), is_record(Gt, global_title) ->
 	#gtt_match{gt_range_from = RangeFrom, gt_range_to = RangeTo,
-		   numbering_plan = NumPlan, nature_of_addr_ind = NatureInd,
-		   dpc = Dpc, ssn = Ssn} = Match,
+		   numbering_plan = NumPlan, nature_of_addr_ind = NatureInd} = Match,
 	% build a list of the individual criteria that all have to match
 	SubMatchList = [{digits, {RangeFrom, RangeTo}, Gt#global_title.phone_number},
 			{numbering_plan, NumPlan, Gt#global_title.numbering_plan},
 			{nature_of_addr_ind, NatureInd, Gt#global_title.nature_of_addr_ind}],
-	gt_sub_match_list(SubMatchList).
+	gt_sub_match_list(SubMatchList);
+% Same as above, but for SCCP Address (i.e. GT + point code and SSN)
+single_gt_match(Match, SccpAddr) when is_record(Match, gtt_match), is_record(SccpAddr, sccp_addr) ->
+	#gtt_match{dpc = Dpc, ssn = Ssn} = Match,
+	Gt = SccpAddr#sccp_addr.global_title,
+	% First match the GT part
+	case single_gt_match(Match, Gt) of
+	    false ->
+		false;
+	    true ->
+		% build a list of the individual criteria that all have to match
+		SubMatchList = [{dpc, Dpc}, {ssn, Ssn}],
+		gt_sub_match_list(SubMatchList)
+	end.
 
 % iterate over the list of individual match criteria and call the match function
 gt_sub_match_list([]) ->
@@ -117,5 +146,9 @@ execute_gtt(Gt, RulesList) when is_record(Gt, global_title), is_list(RulesList) 
 		Gt;
 	    Action ->
 		apply_gtt_actions(Gt, Action)
-	end.
-
+	end;
+% Same as above, but for SCCP Address (i.e. GT + point code and SSN)
+execute_gtt(SccpAddr, RulesList) when is_record(SccpAddr, sccp_addr), is_list(RulesList) ->
+	Gt = SccpAddr#sccp_addr.global_title,
+	NewGt = execute_gtt(Gt, RulesList),
+	SccpAddr#sccp_addr{global_title = NewGt}.
