@@ -73,25 +73,26 @@ encode_m3ua_msg(#m3ua_msg{version = Version, msg_class = MsgClass,
 			  msg_type = MsgType, payload = OptList}) ->
 	OptBin = encode_m3ua_opts(OptList),
 	MsgLen = byte_size(OptBin) + 8,
-	<<Version:4, 0:8, MsgClass:8, MsgType:8, MsgLen:32/big, OptBin/binary>>.
+	<<Version:8, 0:8, MsgClass:8, MsgType:8, MsgLen:32/big, OptBin/binary>>.
 
 encode_m3ua_opts(OptList) when is_list(OptList) ->
 	encode_m3ua_opts(OptList, <<>>).
 
 encode_m3ua_opts([], Bin) ->
 	Bin;
-encode_m3ua_opts([Head|Tail], Bin) ->
-	OptBin = encode_m3ua_opt(Head),
+encode_m3ua_opts([{Iei, Attr}|Tail], Bin) ->
+	OptBin = encode_m3ua_opt(Iei, Attr),
 	encode_m3ua_opts(Tail, <<Bin/binary, OptBin/binary>>).
 
-encode_m3ua_opt({?M3UA_IEI_PROTOCOL_DATA, Mtp3}) when is_record(Mtp3, mtp3_msg) ->
+encode_m3ua_opt(?M3UA_IEI_PROTOCOL_DATA, Mtp3) when is_record(Mtp3, mtp3_msg) ->
 	#mtp3_msg{network_ind = Ni, service_ind = Si,
 		  routing_label = #mtp3_routing_label{sig_link_sel = Sls,
 						      origin_pc = Opc,
 						      dest_pc = Dpc},
 		  payload = Payload} = Mtp3,
-	<<Opc:32/big, Dpc:32/big, Si:8, Ni:8, 0:8, Sls:8, Payload/binary>>;
-encode_m3ua_opt({Iei, Data}) when is_integer(Iei), is_binary(Data) ->
+	PayBin = <<Opc:32/big, Dpc:32/big, Si:8, Ni:8, 0:8, Sls:8, Payload/binary>>,
+	encode_m3ua_opt(?M3UA_IEI_PROTOCOL_DATA, PayBin);
+encode_m3ua_opt(Iei, Data) when is_integer(Iei), is_binary(Data) ->
 	Length = byte_size(Data) + 4,
 	PadLen = get_num_pad_bytes(Length),
-	<<Iei:16/big, Length:16/big, 0:PadLen/integer-unit:8, Data/binary>>.
+	<<Iei:16/big, Length:16/big, Data/binary, 0:PadLen/integer-unit:8>>.
