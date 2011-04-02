@@ -63,7 +63,7 @@ parse_m3ua_opt(Opt = ?M3UA_IEI_PROTOCOL_DATA, MsgBin) when is_binary(MsgBin) ->
 			routing_label = #mtp3_routing_label{sig_link_sel = Sls,
 							    origin_pc = Opc,
 							    dest_pc = Dpc},
-			payload = Payload}};
+			payload = Payload, m3ua_mp = Mp}};
 parse_m3ua_opt(Opt, Msg) ->
 	{Opt, Msg}.
 
@@ -89,8 +89,8 @@ encode_m3ua_opt(?M3UA_IEI_PROTOCOL_DATA, Mtp3) when is_record(Mtp3, mtp3_msg) ->
 		  routing_label = #mtp3_routing_label{sig_link_sel = Sls,
 						      origin_pc = Opc,
 						      dest_pc = Dpc},
-		  payload = Payload} = Mtp3,
-	PayBin = <<Opc:32/big, Dpc:32/big, Si:8, Ni:8, 0:8, Sls:8, Payload/binary>>,
+		  payload = Payload, m3ua_mp = Mp} = Mtp3,
+	PayBin = <<Opc:32/big, Dpc:32/big, Si:8, Ni:8, Mp:8, Sls:8, Payload/binary>>,
 	encode_m3ua_opt(?M3UA_IEI_PROTOCOL_DATA, PayBin);
 encode_m3ua_opt(Iei, Data) when is_integer(Iei), is_binary(Data) ->
 	Length = byte_size(Data) + 4,

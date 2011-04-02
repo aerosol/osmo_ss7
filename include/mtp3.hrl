@@ -15,6 +15,7 @@
 	network_ind,
 	service_ind,
 	routing_label,
+	m3ua_mp,		% Message Priority, only in M3UA based msg
 	payload
 	}).
 
