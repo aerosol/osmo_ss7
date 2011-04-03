@@ -41,6 +41,7 @@
 	  user_pid,
 	  sctp_remote_ip,
 	  sctp_remote_port,
+	  sctp_local_port,
 	  sctp_sock,
 	  sctp_assoc_id
 	}).
@@ -50,7 +51,7 @@ start_link(InitOpts) ->
 
 reconnect_sctp(L = #m3ua_state{sctp_remote_ip = Ip, sctp_remote_port = Port, sctp_sock = Sock}) ->
 	io:format("SCTP Reconnect ~p:~p~n", [Ip, Port]),
-	InitMsg = #sctp_initmsg{num_ostreams = 1, max_instreams = 1},
+	InitMsg = #sctp_initmsg{num_ostreams = 2, max_instreams = 2},
 	case gen_sctp:connect(Sock, Ip, Port, [{active, once}, {reuseaddr, true},
 					       {sctp_initmsg, InitMsg}]) of
 		{ok, Assoc} ->
@@ -60,11 +61,20 @@ reconnect_sctp(L = #m3ua_state{sctp_remote_ip = Ip, sctp_remote_port = Port, sct
 	end.
 
 init(InitOpts) ->
-	{ok, SctpSock} = gen_sctp:open([{active, once}, {reuseaddr, true}]),
+	OpenOptsBase = [{active, once}, {reuseaddr, true}],
+	LocalPort = proplists:get_value(sctp_local_port, InitOpts),
+	case LocalPort of
+		undefined ->
+			OpenOpts = OpenOptsBase;
+		_ ->
+			OpenOpts = OpenOptsBase ++ [{port, LocalPort}]
+	end,
+	{ok, SctpSock} = gen_sctp:open(OpenOpts),
 	LoopDat = #m3ua_state{role = asp, sctp_sock = SctpSock,
 				user_pid = proplists:get_value(user_pid, InitOpts),
 				sctp_remote_ip = proplists:get_value(sctp_remote_ip, InitOpts),
-				sctp_remote_port = proplists:get_value(sctp_remote_port, InitOpts)},
+				sctp_remote_port = proplists:get_value(sctp_remote_port, InitOpts),
+				sctp_local_port = LocalPort},
 	LoopDat2 = reconnect_sctp(LoopDat),
 	{ok, asp_down, LoopDat2}.
 
