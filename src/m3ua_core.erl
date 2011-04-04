@@ -21,6 +21,7 @@
 -author('Harald Welte <laforge@gnumonks.org>').
 
 -include_lib("kernel/include/inet_sctp.hrl").
+-include("osmo_util.hrl").
 -include("sccp.hrl").
 -include("m3ua.hrl").
 
@@ -39,6 +40,7 @@
 	  asp_state,	% down, inactive, active
 	  t_ack,
 	  user_pid,
+	  user_ref,
 	  sctp_remote_ip,
 	  sctp_remote_port,
 	  sctp_local_port,
@@ -73,6 +75,7 @@ init(InitOpts) ->
 	{ok, SctpSock} = gen_sctp:open(OpenOpts),
 	LoopDat = #m3ua_state{role = asp, sctp_sock = SctpSock,
 				user_pid = proplists:get_value(user_pid, InitOpts),
+				user_ref = proplists:get_value(user_ref, InitOpts),
 				sctp_remote_ip = proplists:get_value(sctp_remote_ip, InitOpts),
 				sctp_remote_port = proplists:get_value(sctp_remote_port, InitOpts),
 				sctp_local_port = LocalPort},
@@ -97,12 +100,18 @@ send_sctp_to_peer(LoopDat, M3uaMsg) when is_record(M3uaMsg, m3ua_msg) ->
 	MsgBin = m3ua_codec:encode_m3ua_msg(M3uaMsg),
 	send_sctp_to_peer(LoopDat, MsgBin).
 
+
+send_prim_to_user(LoopDat, Prim) when is_record(LoopDat, m3ua_state), is_record(Prim, primitive) ->
+	#m3ua_state{user_pid = Pid, user_ref = Ref} = LoopDat,
+	Pid ! {m3ua, Ref, Prim}.
+
 % helper to send one of the up/down/act/inact management messages + start timer
 send_msg_start_tack(LoopDat, State, MsgClass, MsgType, Params) ->
 	% generate and send the respective message
 	Msg = #m3ua_msg{version = 1, msg_class = MsgClass, msg_type = MsgType, payload = Params},
 	send_sctp_to_peer(LoopDat, Msg),
 	% start T(ack) timer and wait for ASP_UP_ACK
+	timer:cancel(LoopDat#m3ua_state.t_ack),
 	{ok, Tack} = timer:apply_after(?T_ACK_TIMEOUT, gen_fsm, send_event,
 				 [self(), {timer_expired, t_ack, {MsgClass, MsgType, Params}}]),
 	{next_state, State, LoopDat#m3ua_state{t_ack = Tack}}.
@@ -122,9 +131,11 @@ handle_info({sctp, Socket, _RemoteIp, _RemotePort, {ANC, SAC}},
 			   inbound_streams = _InStreams, assoc_id = _AssocId} = SAC,
 	case SacState of 
 		comm_up ->
-			% FIXME: primmitive to the user
+			% primmitive to the user
+			send_prim_to_user(LoopDat, osmo_util:make_prim('M','SCTP_ESTABLISH',confirm)),
 			LoopDat2 = LoopDat;
 		comm_lost ->
+			send_prim_to_user(LoopDat, osmo_util:make_prim('M','SCTP_RELEASE',indication)),
 			LoopDat2 = reconnect_sctp(LoopDat);
 		addr_unreachable ->
 			LoopDat2 = reconnect_sctp(LoopDat)
@@ -134,7 +145,7 @@ handle_info({sctp, Socket, _RemoteIp, _RemotePort, {ANC, SAC}},
 
 handle_info({sctp, Socket, RemoteIp, RemotePort, {[Anc], Data}}, State, LoopDat) ->
 	io:format("SCTP rx data: ~p ~p~n", [Anc, Data]),
-	% FIXME: process incoming SCTP data 
+	% process incoming SCTP data 
 	if Socket == LoopDat#m3ua_state.sctp_sock,
 	   RemoteIp == LoopDat#m3ua_state.sctp_remote_ip,
 	   RemotePort == LoopDat#m3ua_state.sctp_remote_port,
@@ -165,6 +176,7 @@ asp_down(#m3ua_msg{msg_class = ?M3UA_MSGC_ASPSM,
 		   msg_type = ?M3UA_MSGT_ASPSM_ASPUP_ACK}, LoopDat) ->
 	timer:cancel(LoopDat#m3ua_state.t_ack),
 	% transition into ASP_INACTIVE
+	send_prim_to_user(LoopDat, osmo_util:make_prim('M','ASP_UP',confirm)),
 	{next_state, asp_inactive, LoopDat};
 
 asp_down(M3uaMsg, LoopDat) when is_record(M3uaMsg, m3ua_msg) ->
@@ -190,14 +202,16 @@ asp_inactive(#m3ua_msg{msg_class = ?M3UA_MSGC_ASPTM,
 		       msg_type = ?M3UA_MSGT_ASPTM_ASPAC_ACK}, LoopDat) ->
 	timer:cancel(LoopDat#m3ua_state.t_ack),
 	% transition into ASP_ACTIVE
-	% FIXME: signal this to the user
+	% signal this to the user
+	send_prim_to_user(LoopDat, osmo_util:make_prim('M','ASP_ACTIVE',confirm)),
 	{next_state, asp_active, LoopDat};
 
 asp_inactive(#m3ua_msg{msg_class = ?M3UA_MSGC_ASPSM,
 		       msg_type = ?M3UA_MSGT_ASPSM_ASPDN_ACK}, LoopDat) ->
 	timer:cancel(LoopDat#m3ua_state.t_ack),
 	% transition into ASP_DOWN
-	% FIXME: signal this to the user
+	% signal this to the user
+	send_prim_to_user(LoopDat, osmo_util:make_prim('M','ASP_DOWN',confirm)),
 	{next_state, asp_down, LoopDat};
 
 asp_inactive(M3uaMsg, LoopDat) when is_record(M3uaMsg, m3ua_msg) ->
@@ -209,14 +223,16 @@ asp_active(#m3ua_msg{msg_class = ?M3UA_MSGC_ASPSM,
 		     msg_type = ?M3UA_MSGT_ASPSM_ASPDN_ACK}, LoopDat) ->
 	timer:cancel(LoopDat#m3ua_state.t_ack),
 	% transition into ASP_DOWN
-	% FIXME: signal this to the user
+	% signal this to the user
+	send_prim_to_user(LoopDat, osmo_util:make_prim('M','ASP_DOWN',confirm)),
 	{next_state, asp_down, LoopDat};
 
 asp_active(#m3ua_msg{msg_class = ?M3UA_MSGC_ASPTM,
 		     msg_type = ?M3UA_MSGT_ASPTM_ASPIA_ACK}, LoopDat) ->
 	timer:cancel(LoopDat#m3ua_state.t_ack),
 	% transition into ASP_INACTIVE
-	% FIXME: signal this to the user
+	% signal this to the user
+	send_prim_to_user(LoopDat, osmo_util:make_prim('M','ASP_INACTIVE',confirm)),
 	{next_state, asp_inactive, LoopDat};
 
 asp_active(#primitive{subsystem = 'M', gen_name = 'ASP_DOWN',
@@ -244,7 +260,9 @@ asp_active(#primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
 	{next_state, asp_active, LoopDat};
 asp_active(#m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_TRANSFER,
 		     msg_type = ?M3UA_MSGT_XFR_DATA, payload = Params}, LoopDat) ->
-	% FIXME: Send primitive to the user
+	% Send primitive to the user
+	Mtp3 = proplists:get_value(?M3UA_IEI_PROTOCOL_DATA, Params),
+	send_prim_to_user(LoopDat, osmo_util:make_prim('M','TRANSFER',indication,[Mtp3])),
 	{next_state, asp_active, LoopDat};
 asp_active(#m3ua_msg{msg_class = ?M3UA_MSGC_ASPTM,
 		     msg_type = ?M3UA_MSGT_ASPTM_ASPIA_ACK}, LoopDat) ->
@@ -252,10 +270,9 @@ asp_active(#m3ua_msg{msg_class = ?M3UA_MSGC_ASPTM,
 	% transition to ASP_INACTIVE
         {next_state, asp_inactive, LoopDat};
 
-
-
 asp_active(M3uaMsg, LoopDat) when is_record(M3uaMsg, m3ua_msg) ->
 	rx_m3ua(M3uaMsg, asp_active, LoopDat).
+
 
 
 rx_sctp(_Anc, Data, State, LoopDat) ->
@@ -264,9 +281,11 @@ rx_sctp(_Anc, Data, State, LoopDat) ->
 	{next_state, State, LoopDat}.
 
 
+
 rx_m3ua(Msg = #m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_MGMT,
 			msg_type = ?M3UA_MSGT_MGMT_NTFY}, State, LoopDat) ->
 	io:format("M3UA NOTIFY~n"),
+	send_prim_to_user(LoopDat, osmo_util:make_prim('M','NOTIFY',indication,[Msg])),
 	{next_state, State, LoopDat};
 
 rx_m3ua(Msg = #m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_ASPSM,
@@ -276,6 +295,26 @@ rx_m3ua(Msg = #m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_ASPSM,
 	send_sctp_to_peer(LoopDat, Msg#m3ua_msg{msg_type = ?M3UA_MSGT_ASPSM_BEAT_ACK}),
 	{next_state, State, LoopDat};
 
+rx_m3ua(Msg = #m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_MGMT,
+			msg_type = ?M3UA_MSGT_MGMT_ERR}, State, LoopDat) ->
+	send_prim_to_user(LoopDat, osmo_util:make_prim('M','ERROR',indication,[Msg])),
+	{next_state, State, LoopDat};
+
+rx_m3ua(Msg = #m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_SSNM,
+		        msg_type = MsgType, payload = Params}, State, LoopDat) ->
+	Mtp = map_ssnm_to_mtp_prim(MsgType),
+	send_prim_to_user(LoopDat, Mtp),
+	{next_state, State, LoopDat};
+
 rx_m3ua(Msg = #m3ua_msg{}, State, LoopDat) ->
 	io:format("M3UA Unknown messge ~p in state ~p~n", [Msg, State]),
 	{next_state, State, LoopDat}.
+
+map_ssnm_to_mtp_prim(MsgType) ->
+	Mtp = #primitive{subsystem = 'MTP', spec_name = indiciation},
+	case MsgType of
+	    ?M3UA_MSGT_SSNM_DUNA -> Mtp#primitive{gen_name = 'PAUSE'};
+	    ?M3UA_MSGT_SSNM_DAVA -> Mtp#primitive{gen_name = 'RESUME'};
+	    ?M3UA_MSGT_SSNM_SCON -> Mtp#primitive{gen_name = 'STATUS'};
+	    ?M3UA_MSGT_SSNM_DUPU -> Mtp#primitive{gen_name = 'STATUS'}
+	end.
