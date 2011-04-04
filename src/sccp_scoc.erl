@@ -20,6 +20,7 @@
 -module(sccp_scoc).
 -behaviour(gen_fsm).
 
+-include("osmo_util.hrl").
 -include("sccp.hrl").
 
 -export([start_link/1]).
@@ -27,8 +28,6 @@
 -export([init/1, handle_event/3]).
 -export([idle/2, conn_pend_in/2, conn_pend_out/2, active/2, disconnect_pending/2,
 	 reset_incoming/2, reset_outgoing/2, bothway_reset/2, wait_conn_conf/2]).
-
--export([make_prim/4, make_prim/3]).
 
 %% gen_fsm callbacks
 
@@ -82,19 +81,12 @@ handle_event({timer_expired, tx_inact_timer}, State, LoopDat) ->
 		  {protocol_class, Class}, {seq_segm, 0}, {credit, 0}],
 	Msg = #sccp_msg{msg_type = ?SCCP_MSGT_IT, parameters = Params},
 	gen_fsm:send_event(LoopDat#state.scrc_pid,
-			   make_prim('OCRC','CONNECTION-MSG', request, Msg)),
+			   osmo_util:make_prim('OCRC','CONNECTION-MSG', request, Msg)),
 	{next_state, State, LoopDat};
 handle_event({timer_expired, rx_inact_timer}, State, LoopDat) ->
 	io:format("FIXME: T(iar) is expired, release connection~n", []),
 	% FIXME: Initiate connection release procedure
 	{next_state, State, LoopDat}.
-
-% helper function to create a #primitive record
-make_prim(Subsys, GenName, SpecName) ->
-	make_prim(Subsys, GenName, SpecName, []).
-make_prim(Subsys, GenName, SpecName, Param) ->
-	#primitive{subsystem = Subsys, gen_name = GenName,
-		   spec_name = SpecName, parameters = Param}.
 
 % helper function to send a primitive to the user
 send_user(_LoopDat = #state{user_pid = Pid}, Prim = #primitive{}) ->
@@ -134,7 +126,7 @@ idle(#primitive{subsystem = 'N', gen_name = 'CONNECT',
 	% determine protocol class and credit
 	LoopDat1 = LoopDat#state{local_reference = make_ref(), class = 2},
 	gen_fsm:send_event(LoopDat1#state.scrc_pid,
-			   make_prim('OCRC','CONNECTION', indication, Param)),
+			   osmo_util:make_prim('OCRC','CONNECTION', indication, Param)),
 	% start connection timer
 	{next_state, conn_pend_out, LoopDat1, ?CONNECTION_TIMER};
 
@@ -147,7 +139,7 @@ idle(#primitive{subsystem = 'RCOC', gen_name = 'CONNECTION',
 	Class = proplists:get_value(protocol_class, Params),
 	LoopDat1 = LoopDat#state{remote_reference = RemRef, class = Class},
 	% send N-CONNECT.ind to user
-	send_user(LoopDat1, make_prim('N', 'CONNECT', indication, [{scoc_pid, self()}|Params])),
+	send_user(LoopDat1, osmo_util:make_prim('N', 'CONNECT', indication, [{scoc_pid, self()}|Params])),
 	%#primitive{subsystem = 'N', gen_name = 'CONNECT', spec_name = indication}
 	{next_state, conn_pend_in, LoopDat1};
 
@@ -155,7 +147,7 @@ idle(#primitive{subsystem = 'RCOC', gen_name = 'CONNECTION',
 idle(#primitive{subsystem = 'RCOC', gen_name = 'ROUTING FAILURE',
 		spec_name = indication}, LoopDat) ->
 	gen_fsm:send_event(LoopDat#state.scrc_pid,
-			   make_prim('OCRC', 'CONNECTION REFUSED', indication)),
+			   osmo_util:make_prim('OCRC', 'CONNECTION REFUSED', indication)),
 	{next_state, idle, LoopDat};
 
 %FIXME: request type 2 ?!?
@@ -164,7 +156,7 @@ idle(#primitive{subsystem = 'RCOC', gen_name = 'ROUTING FAILURE',
 idle(#primitive{subsystem = 'RCOC', gen_name = 'RELEASED',
 		spec_name = indication}, LoopDat) ->
 	gen_fsm:send_event(LoopDat#state.scrc_pid,
-			   make_prim('OCRC', 'RELEASE COMPLETE', indication)),
+			   osmo_util:make_prim('OCRC', 'RELEASE COMPLETE', indication)),
 	{next_state, idle, LoopDat};
 
 % RCOC-RELEASE_COMPLETE.ind from SCRC
@@ -175,7 +167,7 @@ idle(#primitive{subsystem = 'RCOC', gen_name = 'RELEASE COMPLETE',
 idle(#primitive{subsystem= 'RCOC', gen_name = 'DATA',
 		spec_name = indication, parameters = Param}, LoopDat) ->
 	% FIXME: if source reference, send error
-	send_user(LoopDat, make_prim('N', 'DATA', indication, Param)),
+	send_user(LoopDat, osmo_util:make_prim('N', 'DATA', indication, Param)),
 	{next_state, idle, LoopDat}.
 
 % STATE Connection pending incoming
@@ -187,7 +179,7 @@ conn_pend_in(#primitive{subsystem = 'N', gen_name = 'CONNECT',
 		    {src_local_ref, LoopDat#state.local_reference},
 		    {protocol_class, LoopDat#state.class}] ++ Param,
 	gen_fsm:send_event(LoopDat#state.scrc_pid,
-			   make_prim('OCRC', 'CONNECTION', confirm, OutParam)),
+			   osmo_util:make_prim('OCRC', 'CONNECTION', confirm, OutParam)),
 	% start inactivity timers
 	LoopDat1 = start_inact_timers(LoopDat),
 	{next_state, active, LoopDat1};
@@ -197,24 +189,24 @@ conn_pend_in(#primitive{subsystem = 'N', gen_name = 'DISCONNECT',
 			spec_name = request, parameters = Param}, LoopDat) ->
 	% release resourcers (local ref may have to be released an frozen)
 	gen_fsm:send_event(LoopDat#state.scrc_pid,
-			   make_prim('OCRC', 'CONNECTION REFUSED', indication, Param)),
+			   osmo_util:make_prim('OCRC', 'CONNECTION REFUSED', indication, Param)),
 	{next_state, idle, LoopDat}.
 	
 
 disc_ind_stop_rel_3(LoopDat) ->
 	% send N-DISCONNECT.ind to user
-	send_user(LoopDat, make_prim('N', 'DISCONNECT',indication)),
+	send_user(LoopDat, osmo_util:make_prim('N', 'DISCONNECT',indication)),
 	% stop inactivity timers
 	stop_inact_timers(LoopDat),
 	gen_fsm:send_event(LoopDat#state.scrc_pid,
-			   make_prim('OCRC', 'RELEASED', indication)),
+			   osmo_util:make_prim('OCRC', 'RELEASED', indication)),
 	% start release timer
 	{next_state, disconnect_pending, LoopDat, ?RELEASE_TIMER}.
 
 rel_res_disc_ind_idle_2(LoopDat) ->
 	% release resources and local reference (freeze)
 	% send N-DISCONNECT.ind to user
-	send_user(LoopDat, make_prim('N', 'DISCONNECT', indication)),
+	send_user(LoopDat, osmo_util:make_prim('N', 'DISCONNECT', indication)),
 	{next_state, idle, LoopDat}.
 
 
@@ -229,7 +221,7 @@ conn_pend_out(routing_failure, LoopDat) ->
 	rel_res_disc_ind_idle_2(LoopDat);
 conn_pend_out(released, LoopDat) ->
 	gen_fsm:send_event(LoopDat#state.scrc_pid,
-			   make_prim('OCRC',  'RELEASE COMPLETE', indication)),
+			   osmo_util:make_prim('OCRC',  'RELEASE COMPLETE', indication)),
 	rel_res_disc_ind_idle_2(LoopDat);
 % other N-PDU Type
 conn_pend_out(other_npdu_type, LoopDat) ->
@@ -256,7 +248,7 @@ rel_freeze_idle(LoopDat) ->
 % STATE Wait connection confirmed
 wait_conn_conf(released, LoopDat) ->
 	gen_fsm:send_event(LoopDat#state.scrc_pid,
-			   make_prim('OCRC', 'RELEASE COMPLETE', indication)),
+			   osmo_util:make_prim('OCRC', 'RELEASE COMPLETE', indication)),
 	stop_c_tmr_rel_idle_5(LoopDat);
 wait_conn_conf(connection_confirm, LoopDat) ->
 	% stop connection timer (implicit)
@@ -275,7 +267,7 @@ wait_conn_conf(routing_failure, LoopDat) ->
 
 relsd_tmr_disc_pend_6(LoopDat) ->
 	gen_fsm:send_event(LoopDat#state.scrc_pid,
-			   make_prim('OCRC', 'RELEASED', indication)),
+			   osmo_util:make_prim('OCRC', 'RELEASED', indication)),
 	% start release timer
 	{next_state, disconnect_pending, LoopDat, ?RELEASE_TIMER}.
 
@@ -301,7 +293,7 @@ active(released, LoopDat) ->
 	% stop inactivity timers
 	stop_inact_timers(LoopDat),
 	gen_fsm:send_event(LoopDat#state.scrc_pid,
-			   make_prim('OCRC', 'RELEASE COMPLETE', indication)),
+			   osmo_util:make_prim('OCRC', 'RELEASE COMPLETE', indication)),
 	{next_state, idle, LoopDat};
 active(error, LoopDat) ->
 	% send N-DISCONNECT.ind to user
@@ -311,7 +303,7 @@ active(error, LoopDat) ->
 	% stop inactivity timers
 	stop_inact_timers(LoopDat),
 	gen_fsm:send_event(LoopDat#state.scrc_pid,
-			   make_prim('OCRC', 'RELEASE COMPLETE', indication)),
+			   osmo_util:make_prim('OCRC', 'RELEASE COMPLETE', indication)),
 	{next_state, idle, LoopDat};
 active(rcv_inact_tmr_exp, LoopDat) ->
 	disc_ind_stop_rel_3(LoopDat);
@@ -342,13 +334,13 @@ active(#primitive{subsystem = 'RCOC', gen_name = 'CONNECTION-MSG',
 	% FIXME check for M-bit=1 and put data in Rx queue
 	% N-DATA.ind to user
 	UserData = proplists:get_value(user_data, Msg#sccp_msg.parameters),
-	send_user(LoopDat, make_prim('N', 'DATA', indication, {user_data, UserData})),
+	send_user(LoopDat, osmo_util:make_prim('N', 'DATA', indication, {user_data, UserData})),
 	{next_state, active, LoopDat1};
 % Reset procedures
 active(#primitive{subsystem = 'N', gen_name = 'RESET',
 		  spec_name = request, parameters = Param}, LoopDat) ->
 	gen_fsm:send_event(LoopDat#state.scrc_pid,
-			   make_prim('OCRC', 'RESET', request, Param)),
+			   osmo_util:make_prim('OCRC', 'RESET', request, Param)),
 	% start reset timer
 	% restart send inact timer
 	LoopDat1 = restart_tx_inact_timer(LoopDat),
@@ -359,7 +351,7 @@ active(internal_reset_req, LoopDat) ->
 	send_user(LoopDat, #primitive{subsystem = 'N', gen_name = 'RESET',
 				      spec_name = indication}),
 	gen_fsm:send_event(LoopDat#state.scrc_pid,
-			   make_prim('OCRC', 'RESET', request)),
+			   osmo_util:make_prim('OCRC', 'RESET', request)),
 	% start reset timer
 	% restart send inact timer
 	LoopDat1 = restart_tx_inact_timer(LoopDat),
@@ -372,7 +364,7 @@ active(reset_req, LoopDat) ->
 	% restart send inactivity timer
 	LoopDat1 = restart_tx_inact_timer(LoopDat),
 	% N-RESET.ind to user
-	send_user(LoopDat, make_prim('N', 'RESET', indication)),
+	send_user(LoopDat, osmo_util:make_prim('N', 'RESET', indication)),
 	% reset variables and discard all queued and unacked msgs
 	{next_state, reset_incoming, LoopDat1}.
 
@@ -393,7 +385,7 @@ disconnect_pending(other_npdu_type, LoopDat) ->
 	{next_state, disconnect_pending, LoopDat};
 disconnect_pending(timeout, LoopDat) ->
 	gen_fsm:send_event(LoopDat#state.scrc_pid,
-			   make_prim('OCRC', 'RELEASED', indication)),
+			   osmo_util:make_prim('OCRC', 'RELEASED', indication)),
 	% start interval timer
 	% FIXME start repeat release timer
 	{next_state, disconnect_pending, ?RELEASE_REP_TIMER};
@@ -403,13 +395,13 @@ disconnect_pending(intv_tmr_exp, LoopDat) ->
 % FIXME: this is currently ending up in normal 'timeout' above
 disconnect_pending(repeat_release_tmr_exp, LoopDat) ->
 	gen_fsm:send_event(LoopDat#state.scrc_pid,
-			   make_prim('OCRC', 'RELEASED', indication)),
+			   osmo_util:make_prim('OCRC', 'RELEASED', indication)),
 	% FIXME restart repeat release timer
 	{next_state, disconnect_pending}.
 
 res_out_res_conf_req(LoopDat) ->
 	% N-RESET.conf to user
-	send_user(LoopDat, make_prim('N', 'RESET', confirm)),
+	send_user(LoopDat, osmo_util:make_prim('N', 'RESET', confirm)),
 	% stop reset timer (implicit)
 	% restart receive inactivity timer
 	LoopDat1 = restart_rx_inact_timer(LoopDat),

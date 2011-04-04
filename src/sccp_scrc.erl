@@ -21,6 +21,7 @@
 -behaviour(gen_fsm).
 -export([start_link/1, init/1, idle/2]).
 
+-include("osmo_util.hrl").
 -include("sccp.hrl").
 
 

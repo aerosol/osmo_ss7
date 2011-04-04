@@ -23,6 +23,12 @@
 -export([digit_list2int/1, int2digit_list/1]).
 -export([reload_config/0]).
 -export([tuple_walk/3, tuple_walk_print_cb/3]).
+-export([make_prim/4, make_prim/3]).
+
+-include("osmo_util.hrl").
+
+-compile({parse_transform, exprecs}).
+-export_records([primitive]).
 
 % Convert a list of digits to an integer value
 digit_list2int(Int, []) ->
@@ -127,3 +133,10 @@ tuple_fieldlist_walk(Path, TplName, [Head|List], TupleCb, Args, OutList) ->
 tuple_walk_print_cb(Path, Tpl, _Args) when is_list(Path), is_tuple(Tpl) ->
 	io:format("~p:~p~n", [Path, Tpl]),
 	Tpl.
+
+% helper function to create a #primitive record
+make_prim(Subsys, GenName, SpecName) ->
+	make_prim(Subsys, GenName, SpecName, []).
+make_prim(Subsys, GenName, SpecName, Param) ->
+	#primitive{subsystem = Subsys, gen_name = GenName,
+		   spec_name = SpecName, parameters = Param}.
