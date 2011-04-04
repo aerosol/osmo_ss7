@@ -26,7 +26,7 @@
 
 -export([start_link/1]).
 
--export([init/1, handle_event/3, handle_info/3]).
+-export([init/1, terminate/3, code_change/4, handle_event/3, handle_info/3]).
 
 % FSM states:
 -export([asp_down/2, asp_inactive/2, asp_active/2]).
@@ -79,6 +79,13 @@ init(InitOpts) ->
 	LoopDat2 = reconnect_sctp(LoopDat),
 	{ok, asp_down, LoopDat2}.
 
+terminate(Reason, _State, LoopDat) ->
+	io:format("Terminating ~p (Reason: ~p)~n", [?MODULE, Reason]),
+	gen_sctp:close(LoopDat#m3ua_state.sctp_sock).
+
+code_change(_OldVsn, StateName, StateData, _Extra) ->
+	{ok, StateName, StateData}.
+
 % Helper function to send data to the SCTP peer
 send_sctp_to_peer(LoopDat, PktData) when is_binary(PktData) ->
 	#m3ua_state{sctp_sock = Sock, sctp_assoc_id = Assoc} = LoopDat,
@@ -112,7 +119,7 @@ handle_info({sctp, Socket, _RemoteIp, _RemotePort, {ANC, SAC}},
 	     _State, LoopDat) when is_record(SAC, sctp_assoc_change) ->
 	io:format("SCTP Assoc Change ~p ~p~n", [ANC, SAC]),
 	#sctp_assoc_change{state = SacState, outbound_streams = _OutStreams,
-			   inbound_streams = _InStreams, assoc_id = AssocId} = SAC,
+			   inbound_streams = _InStreams, assoc_id = _AssocId} = SAC,
 	case SacState of 
 		comm_up ->
 			% FIXME: primmitive to the user
@@ -251,7 +258,7 @@ asp_active(M3uaMsg, LoopDat) when is_record(M3uaMsg, m3ua_msg) ->
 	rx_m3ua(M3uaMsg, asp_active, LoopDat).
 
 
-rx_sctp(Anc, Data, State, LoopDat) ->
+rx_sctp(_Anc, Data, State, LoopDat) ->
 	M3uaMsg = m3ua_codec:parse_m3ua_msg(Data),
 	gen_fsm:send_event(self(), M3uaMsg),
 	{next_state, State, LoopDat}.
