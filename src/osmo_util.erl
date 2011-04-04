@@ -24,6 +24,7 @@
 -export([reload_config/0]).
 -export([tuple_walk/3, tuple_walk_print_cb/3]).
 -export([make_prim/4, make_prim/3]).
+-export([pointcode2int/1, pointcode2int/2, pointcode_fmt/2]).
 
 -include("osmo_util.hrl").
 
@@ -140,3 +141,33 @@ make_prim(Subsys, GenName, SpecName) ->
 make_prim(Subsys, GenName, SpecName, Param) ->
 	#primitive{subsystem = Subsys, gen_name = GenName,
 		   spec_name = SpecName, parameters = Param}.
+
+% parse a 3-tuple pointcode into a raw integer
+pointcode2int({pointcode, Std, Param}) ->
+	pointcode2int(Std, Param);
+pointcode2int({Std, Param}) ->
+	pointcode2int(Std, Param).
+
+pointcode2int(itu, {A, B, C}) ->
+	<<PcInt:14/big>> = <<A:3, B:8, C:3>>,
+	PcInt;
+pointcode2int(ansi, {A, B, C}) ->
+	<<PcInt:24/big>> = <<A:8, B:8, C:8>>,
+	PcInt;
+pointcode2int(ttc, {A, B, C}) ->
+	<<PcInt:16/big>> = <<A:5, B:4, C:7>>,
+	PcInt.
+
+% format a point-code into a 3-tuple according to the standard used
+pointcode_fmt(Std, P) when is_binary(P) ->
+	<<PcInt/integer>> = P,
+	pointcode_fmt(Std, PcInt);
+pointcode_fmt(itu, PcInt) when is_integer(PcInt) ->
+	<<A:3, B:8, C:3>> = <<PcInt:14/big>>,
+	{pointcode, itu, {A, B, C}};
+pointcode_fmt(ansi, PcInt) ->
+	<<A:8, B:8, C:8>> = <<PcInt:24/big>>,
+	{pointcode, ansi, {A, B, C}};
+pointcode_fmt(ttc, PcInt) ->
+	<<A:5, B:4, C:7>> = <<PcInt:16/big>>,
+	{pointcode, ttc, {A, B, C}}.
