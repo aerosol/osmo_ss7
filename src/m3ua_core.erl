@@ -57,6 +57,7 @@ reconnect_sctp(L = #m3ua_state{sctp_remote_ip = Ip, sctp_remote_port = Port, sct
 	case gen_sctp:connect(Sock, Ip, Port, [{active, once}, {reuseaddr, true},
 					       {sctp_initmsg, InitMsg}]) of
 		{ok, Assoc} ->
+			send_prim_to_user(L, osmo_util:make_prim('M','SCTP_ESTABLISH',confirm)),
 			L#m3ua_state{sctp_assoc_id = Assoc#sctp_assoc_change.assoc_id};
 		{error, Error } ->
 			io:format("SCTP Error ~p, reconnecting~n", [Error]),
@@ -284,14 +285,12 @@ rx_sctp(_Anc, Data, State, LoopDat) ->
 
 rx_m3ua(Msg = #m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_MGMT,
 			msg_type = ?M3UA_MSGT_MGMT_NTFY}, State, LoopDat) ->
-	io:format("M3UA NOTIFY~n"),
 	send_prim_to_user(LoopDat, osmo_util:make_prim('M','NOTIFY',indication,[Msg])),
 	{next_state, State, LoopDat};
 
 rx_m3ua(Msg = #m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_ASPSM,
 			msg_type = ?M3UA_MSGT_ASPSM_BEAT}, State, LoopDat) ->
 	% Send BEAT_ACK using the same payload as the BEAT msg
-	io:format("M3UA BEAT~n"),
 	send_sctp_to_peer(LoopDat, Msg#m3ua_msg{msg_type = ?M3UA_MSGT_ASPSM_BEAT_ACK}),
 	{next_state, State, LoopDat};
 
