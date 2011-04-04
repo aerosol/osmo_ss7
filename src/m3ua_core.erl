@@ -26,7 +26,7 @@
 
 -export([start_link/1]).
 
--export([init/1, handle_event/3]).
+-export([init/1, handle_event/3, handle_info/3]).
 
 % FSM states:
 -export([asp_down/2, asp_inactive/2, asp_active/2]).
@@ -57,6 +57,7 @@ reconnect_sctp(L = #m3ua_state{sctp_remote_ip = Ip, sctp_remote_port = Port, sct
 		{ok, Assoc} ->
 			L#m3ua_state{sctp_assoc_id = Assoc#sctp_assoc_change.assoc_id};
 		{error, Error } ->
+			io:format("SCTP Error ~p, reconnecting~n", [Error]),
 			reconnect_sctp(L)
 	end.
 
@@ -95,22 +96,23 @@ send_msg_start_tack(LoopDat, State, MsgClass, MsgType, Params) ->
 	Msg = #m3ua_msg{version = 1, msg_class = MsgClass, msg_type = MsgType, payload = Params},
 	send_sctp_to_peer(LoopDat, Msg),
 	% start T(ack) timer and wait for ASP_UP_ACK
-	Tack = timer:apply_after(?T_ACK_TIMEOUT, gen_fsm, send_event,
+	{ok, Tack} = timer:apply_after(?T_ACK_TIMEOUT, gen_fsm, send_event,
 				 [self(), {timer_expired, t_ack, {MsgClass, MsgType, Params}}]),
 	{next_state, State, LoopDat#m3ua_state{t_ack = Tack}}.
 
 
-handle_event(Msg = #m3ua_msg{msg_class = ?M3UA_MSGC_ASPSM,
-			     msg_type = ?M3UA_MSGT_ASPSM_BEAT}, State, LoopDat) ->
-	% Send BEAT_ACK using the same payload as the BEAT msg
-	send_sctp_to_peer(LoopDat, Msg#m3ua_msg{msg_type = ?M3UA_MSGT_ASPSM_BEAT_ACK}),
-	{next_state, State, LoopDat};
 
-handle_event({sctp, Socket, _RemoteIp, _RemotePort, {ANC, SAC}},
+handle_event(Event, State, LoopDat) ->
+	io:format("Unknown Event ~p in state ~p~n", [Event, State]),
+	{next_state, State, LoopDat}.
+
+
+
+handle_info({sctp, Socket, _RemoteIp, _RemotePort, {ANC, SAC}},
 	     _State, LoopDat) when is_record(SAC, sctp_assoc_change) ->
 	io:format("SCTP Assoc Change ~p ~p~n", [ANC, SAC]),
-	#sctp_assoc_change{state = SacState, outbound_streams = OutStreams,
-			   inbound_streams = InStreams, assoc_id = AssocId} = SAC,
+	#sctp_assoc_change{state = SacState, outbound_streams = _OutStreams,
+			   inbound_streams = _InStreams, assoc_id = AssocId} = SAC,
 	case SacState of 
 		comm_up ->
 			% FIXME: primmitive to the user
@@ -123,13 +125,22 @@ handle_event({sctp, Socket, _RemoteIp, _RemotePort, {ANC, SAC}},
 	inet:setopts(Socket, [{active, once}]),
 	{next_state, asp_down, LoopDat2};
 
-handle_event({sctp, Socket, _RemoteIp, _RemotePort, {[Anc], Data}}, State, LoopDat) ->
+handle_info({sctp, Socket, RemoteIp, RemotePort, {[Anc], Data}}, State, LoopDat) ->
 	io:format("SCTP rx data: ~p ~p~n", [Anc, Data]),
 	% FIXME: process incoming SCTP data 
+	if Socket == LoopDat#m3ua_state.sctp_sock,
+	   RemoteIp == LoopDat#m3ua_state.sctp_remote_ip,
+	   RemotePort == LoopDat#m3ua_state.sctp_remote_port,
+	   3 == Anc#sctp_sndrcvinfo.ppid ->
+		Ret = rx_sctp(Anc, Data, State, LoopDat);
+	   true ->
+		io:format("unknown SCTP: ~p ~p~n", [Anc, Data]),
+		Ret = {next_state, State, LoopDat}
+	end,
 	inet:setopts(Socket, [{active, once}]),
-	{next_state, State, LoopDat};
+	Ret;
 
-handle_event({sctp, Socket, RemoteIp, RemotePort, {_Anc, Data}}, _State, LoopDat)
+handle_info({sctp, Socket, RemoteIp, RemotePort, {_Anc, Data}}, _State, LoopDat)
 					when is_record(Data, sctp_shutdown_event) ->
 	io:format("SCTP remote ~p:~p shutdown~n", [RemoteIp, RemotePort]),
 	inet:setopts(Socket, [{active, once}]),
@@ -138,68 +149,79 @@ handle_event({sctp, Socket, RemoteIp, RemotePort, {_Anc, Data}}, _State, LoopDat
 
 
 asp_down(#primitive{subsystem = 'M', gen_name = 'ASP_UP',
-		    spec_name = request, parameters = Params}, LoopDat) ->
-	send_msg_start_tack(LoopDat, asp_down, ?M3UA_MSGC_ASPSM, ?M3UA_MSGT_ASPSM_ASPUP, Params);
+		    spec_name = request, parameters = _Params}, LoopDat) ->
+	send_msg_start_tack(LoopDat, asp_down, ?M3UA_MSGC_ASPSM, ?M3UA_MSGT_ASPSM_ASPUP, []);
 asp_down({timer_expired, t_ack, {?M3UA_MSGC_ASPSM, ?M3UA_MSGT_ASPSM_ASPUP, Params}}, LoopDat) ->
 	send_msg_start_tack(LoopDat, asp_down, ?M3UA_MSGC_ASPSM, ?M3UA_MSGT_ASPSM_ASPUP, Params);
 
 asp_down(#m3ua_msg{msg_class = ?M3UA_MSGC_ASPSM,
 		   msg_type = ?M3UA_MSGT_ASPSM_ASPUP_ACK}, LoopDat) ->
+	timer:cancel(LoopDat#m3ua_state.t_ack),
 	% transition into ASP_INACTIVE
-	{next_state, asp_inactive, LoopDat}.
+	{next_state, asp_inactive, LoopDat};
+
+asp_down(M3uaMsg, LoopDat) when is_record(M3uaMsg, m3ua_msg) ->
+	rx_m3ua(M3uaMsg, asp_down, LoopDat).
 
 
-
-asp_inactive(#primitive{subsystem = 'M', gen_name = 'ASP_ACTIVATE',
-			spec_name = request, parameters = Params}, LoopDat) ->
-	send_msg_start_tack(LoopDat, asp_inactive, ?M3UA_MSGC_ASPTM, ?M3UA_MSGT_ASPTM_ASPAC, Params);
+asp_inactive(#primitive{subsystem = 'M', gen_name = 'ASP_ACTIVE',
+			spec_name = request, parameters = _Params}, LoopDat) ->
+	send_msg_start_tack(LoopDat, asp_inactive, ?M3UA_MSGC_ASPTM, ?M3UA_MSGT_ASPTM_ASPAC,
+			   [{?M3UA_IEI_TRAF_MODE_TYPE, <<0,0,0,1>>}]);
 
 asp_inactive({timer_expired, t_ack, {?M3UA_MSGC_ASPTM, ?M3UA_MSGT_ASPTM_ASPAC, Params}}, LoopDat) ->
 	send_msg_start_tack(LoopDat, asp_inactive, ?M3UA_MSGC_ASPTM, ?M3UA_MSGT_ASPTM_ASPAC, Params);
 
 asp_inactive(#primitive{subsystem = 'M', gen_name = 'ASP_DOWN',
-		      spec_name = request, parameters = Params}, LoopDat) ->
-	send_msg_start_tack(LoopDat, asp_inactive, ?M3UA_MSGC_ASPSM, ?M3UA_MSGT_ASPSM_ASPDN, Params);
+		      spec_name = request, parameters = _Params}, LoopDat) ->
+	send_msg_start_tack(LoopDat, asp_inactive, ?M3UA_MSGC_ASPSM, ?M3UA_MSGT_ASPSM_ASPDN, []);
 
 asp_inactive({timer_expired, t_ack, {?M3UA_MSGC_ASPSM, ?M3UA_MSGT_ASPSM_ASPDN, Params}}, LoopDat) ->
 	send_msg_start_tack(LoopDat, asp_inactive, ?M3UA_MSGC_ASPSM, ?M3UA_MSGT_ASPSM_ASPDN, Params);
 
 asp_inactive(#m3ua_msg{msg_class = ?M3UA_MSGC_ASPTM,
 		       msg_type = ?M3UA_MSGT_ASPTM_ASPAC_ACK}, LoopDat) ->
+	timer:cancel(LoopDat#m3ua_state.t_ack),
 	% transition into ASP_ACTIVE
 	% FIXME: signal this to the user
 	{next_state, asp_active, LoopDat};
 
 asp_inactive(#m3ua_msg{msg_class = ?M3UA_MSGC_ASPSM,
 		       msg_type = ?M3UA_MSGT_ASPSM_ASPDN_ACK}, LoopDat) ->
+	timer:cancel(LoopDat#m3ua_state.t_ack),
 	% transition into ASP_DOWN
 	% FIXME: signal this to the user
-	{next_state, asp_down, LoopDat}.
+	{next_state, asp_down, LoopDat};
+
+asp_inactive(M3uaMsg, LoopDat) when is_record(M3uaMsg, m3ua_msg) ->
+	rx_m3ua(M3uaMsg, asp_inactive, LoopDat).
 
 
 
 asp_active(#m3ua_msg{msg_class = ?M3UA_MSGC_ASPSM,
 		     msg_type = ?M3UA_MSGT_ASPSM_ASPDN_ACK}, LoopDat) ->
+	timer:cancel(LoopDat#m3ua_state.t_ack),
 	% transition into ASP_DOWN
 	% FIXME: signal this to the user
 	{next_state, asp_down, LoopDat};
 
 asp_active(#m3ua_msg{msg_class = ?M3UA_MSGC_ASPTM,
 		     msg_type = ?M3UA_MSGT_ASPTM_ASPIA_ACK}, LoopDat) ->
+	timer:cancel(LoopDat#m3ua_state.t_ack),
 	% transition into ASP_INACTIVE
 	% FIXME: signal this to the user
 	{next_state, asp_inactive, LoopDat};
 
 asp_active(#primitive{subsystem = 'M', gen_name = 'ASP_DOWN',
-		      spec_name = request, parameters = Params}, LoopDat) ->
-	send_msg_start_tack(LoopDat, asp_active, ?M3UA_MSGC_ASPSM, ?M3UA_MSGT_ASPSM_ASPDN, Params);
+		      spec_name = request, parameters = _Params}, LoopDat) ->
+	send_msg_start_tack(LoopDat, asp_active, ?M3UA_MSGC_ASPSM, ?M3UA_MSGT_ASPSM_ASPDN, []);
 
 asp_active({timer_expired, t_ack, {?M3UA_MSGC_ASPSM, ?M3UA_MSGT_ASPSM_ASPDN, Params}}, LoopDat) ->
 	send_msg_start_tack(LoopDat, asp_active, ?M3UA_MSGC_ASPSM, ?M3UA_MSGT_ASPSM_ASPDN, Params);
 
 asp_active(#primitive{subsystem = 'M', gen_name = 'ASP_INACTIVE',
-		      spec_name = request, parameters = Params}, LoopDat) ->
-	send_msg_start_tack(LoopDat, asp_active, ?M3UA_MSGC_ASPTM, ?M3UA_MSGT_ASPTM_ASPIA, Params);
+		      spec_name = request, parameters = _Params}, LoopDat) ->
+	send_msg_start_tack(LoopDat, asp_active, ?M3UA_MSGC_ASPTM, ?M3UA_MSGT_ASPTM_ASPIA, []);
 
 asp_active({timer_expired, t_ack, {?M3UA_MSGC_ASPTM, ?M3UA_MSGT_ASPTM_ASPIA, Params}}, LoopDat) ->
 	send_msg_start_tack(LoopDat, asp_active, ?M3UA_MSGC_ASPTM, ?M3UA_MSGT_ASPTM_ASPIA, Params);
@@ -216,4 +238,37 @@ asp_active(#primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
 asp_active(#m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_TRANSFER,
 		     msg_type = ?M3UA_MSGT_XFR_DATA, payload = Params}, LoopDat) ->
 	% FIXME: Send primitive to the user
-	{next_state, asp_active, LoopDat}.
+	{next_state, asp_active, LoopDat};
+asp_active(#m3ua_msg{msg_class = ?M3UA_MSGC_ASPTM,
+		     msg_type = ?M3UA_MSGT_ASPTM_ASPIA_ACK}, LoopDat) ->
+	timer:cancel(LoopDat#m3ua_state.t_ack),
+	% transition to ASP_INACTIVE
+        {next_state, asp_inactive, LoopDat};
+
+
+
+asp_active(M3uaMsg, LoopDat) when is_record(M3uaMsg, m3ua_msg) ->
+	rx_m3ua(M3uaMsg, asp_active, LoopDat).
+
+
+rx_sctp(Anc, Data, State, LoopDat) ->
+	M3uaMsg = m3ua_codec:parse_m3ua_msg(Data),
+	gen_fsm:send_event(self(), M3uaMsg),
+	{next_state, State, LoopDat}.
+
+
+rx_m3ua(Msg = #m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_MGMT,
+			msg_type = ?M3UA_MSGT_MGMT_NTFY}, State, LoopDat) ->
+	io:format("M3UA NOTIFY~n"),
+	{next_state, State, LoopDat};
+
+rx_m3ua(Msg = #m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_ASPSM,
+			msg_type = ?M3UA_MSGT_ASPSM_BEAT}, State, LoopDat) ->
+	% Send BEAT_ACK using the same payload as the BEAT msg
+	io:format("M3UA BEAT~n"),
+	send_sctp_to_peer(LoopDat, Msg#m3ua_msg{msg_type = ?M3UA_MSGT_ASPSM_BEAT_ACK}),
+	{next_state, State, LoopDat};
+
+rx_m3ua(Msg = #m3ua_msg{}, State, LoopDat) ->
+	io:format("M3UA Unknown messge ~p in state ~p~n", [Msg, State]),
+	{next_state, State, LoopDat}.

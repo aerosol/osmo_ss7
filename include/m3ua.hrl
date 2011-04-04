@@ -29,7 +29,7 @@
 -define(M3UA_MSGT_ASPTM_ASPAC,		1).	% ASP Active
 -define(M3UA_MSGT_ASPTM_ASPIA,		2).	% ASP Inactive
 -define(M3UA_MSGT_ASPTM_ASPAC_ACK,	3).	% ASP Active Acknowledgement
--define(M3UA_MSGT_ASPTM_ASPIA_ACK,	3).	% ASP Inactive Acknowledgement
+-define(M3UA_MSGT_ASPTM_ASPIA_ACK,	4).	% ASP Inactive Acknowledgement
 
 -define(M3UA_MSGT_RKM_REG_REQ,		1).	% Registration Request
 -define(M3UA_MSGT_RKM_REG_RSP,		2).	% Registration Response
