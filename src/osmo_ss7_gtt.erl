@@ -82,7 +82,8 @@ single_gt_match(Match, SccpAddr) when is_record(Match, gtt_match), is_record(Scc
 		false;
 	    true ->
 		% build a list of the individual criteria that all have to match
-		SubMatchList = [{dpc, Dpc}, {ssn, Ssn}],
+		SubMatchList = [{dpc, Dpc, SccpAddr#sccp_addr.point_code},
+				{ssn, Ssn, SccpAddr#sccp_addr.ssn}],
 		gt_sub_match_list(SubMatchList)
 	end.
 
