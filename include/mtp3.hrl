@@ -1,3 +1,5 @@
+-define(MTP3_NETIND_INTERNATIONAL,	0).
+-define(MTP3_NETIND_NATIONAL,		2).
 
 -define(MTP3_SERV_MGMT,		0).
 -define(MTP3_SERV_MTN,		1).
