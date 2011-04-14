@@ -1,6 +1,6 @@
 % SCCP routing control procedures (SCRC)
 
-% (C) 2010 by Harald Welte <laforge@gnumonks.org>
+% (C) 2010-2011 by Harald Welte <laforge@gnumonks.org>
 %
 % All Rights Reserved
 %
@@ -19,10 +19,11 @@
 
 -module(sccp_scrc).
 -behaviour(gen_fsm).
--export([start_link/1, init/1, idle/2]).
+-export([start_link/1, init/1, terminate/3, idle/2]).
 
 -include("osmo_util.hrl").
 -include("sccp.hrl").
+-include("mtp3.hrl").
 
 
 
@@ -72,24 +73,56 @@ init(InitPropList) ->
 	{ok, idle, LoopData}.
 
 
+terminate(Reason, _State, _LoopDat) ->
+	io:format("SCRC: Terminating with reason ~p~n", [Reason]),
+	Tref = get(scoc_by_ref),
+	ets:delete(Tref),
+	ok.
+
+% helper function to create new SCOC instance
+spawn_new_scoc(LoopDat) ->
+	% create new SCOC instance
+	UserPid = LoopDat#scrc_state.user_pid,
+	% Compute the new local reference
+	LocalRef = LoopDat#scrc_state.next_local_ref + 1,
+	LoopDat1 = LoopDat#scrc_state{next_local_ref = LocalRef},
+	% generate proplist for SCRC initialization
+	ScocPropList = [{scrc_pid, self()}, {user_pid, UserPid}, {local_reference, LocalRef}],
+	{ok, ScocPid} = sccp_scoc:start_link(ScocPropList),
+	% insert SCOC instance in connection table
+	ConnTable = get(scoc_by_ref),
+	ets:insert_new(ConnTable, {LocalRef, ScocPid}),
+	{LoopDat1, ScocPid}.
+
+
+% N-CONNECT.req from user: spawn new SCOC and deliver primitive to it
+idle(P = #primitive{subsystem = 'N', gen_name = 'CONNECT',
+		    spec_name = request, parameters = Params}, LoopDat) ->
+	% Start new SCOC instance
+	{LoopDat1, ScocPid} = spawn_new_scoc(LoopDat),
+	% Deliver primitive to new SCOC instance
+	gen_fsm:send_event(ScocPid, P),
+	{next_state, idle, LoopDat1};
+
+% N-UNITDATA.req from user (normally this is SCLC, but we don't have SCLC)
+idle(P= #primitive{subsystem = 'N', gen_name = 'UNITDATA',
+		   spec_name = request, parameters = Params}, LoopDat) ->
+	% User needs to specify: Protocol Class, Called Party, Calling Party, Data
+	% FIXME: implement XUDT / LUDT support
+	% encode the actual SCCP message
+	EncMsg = sccp_codec:encode_sccp_msgt(?SCCP_MSGT_UDT, Params),
+	% generate a MTP-TRANSFER.req primitive to the lower layer
+	send_mtp_transfer_down(LoopDat, EncMsg),
+	{next_state, idle, LoopDat};
+
 idle(#primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
 		spec_name = indication, parameters = Params}, LoopDat) ->
-	{ok, Msg} = sccp_codec:parse_sccp_msg(Params),
+	{ok, Msg} = sccp_codec:parse_sccp_msg(Params#mtp3_msg.payload),
 	io:format("Parsed Msg: ~p LoopDat ~p ~n", [Msg, LoopDat]),
 	case Msg of
 		% special handling for CR message here in SCRC
 		#sccp_msg{msg_type = ?SCCP_MSGT_CR} ->
-			% create new SCOC instance
-			UserPid = LoopDat#scrc_state.user_pid,
-			% Compute the new local reference
-			LocalRef = LoopDat#scrc_state.next_local_ref + 1,
-			LoopDat1 = LoopDat#scrc_state{next_local_ref = LocalRef},
-			% generate proplist for SCRC initialization
-			ScocPropList = [{scrc_pid, self()}, {user_pid, UserPid}, {local_reference, LocalRef}],
-			{ok, ScocPid} = sccp_scoc:start_link(ScocPropList),
-			% insert SCOC instance in connection table
-			ConnTable = get(scoc_by_ref),
-			ets:insert_new(ConnTable, {LocalRef, ScocPid}),
+			{LoopDat1, ScocPid} = spawn_new_scoc(LoopDat),
 			% send a RCOC-CONNECTING.ind primitive to the new SCOC fsm
 			UserPrim = sccp_scoc:make_prim('RCOC','CONNECTION', indication, Msg#sccp_msg.parameters),
 			io:format("Sending ~p to ~p~n", [UserPrim, ScocPid]),
@@ -146,8 +179,11 @@ idle(#primitive{subsystem = 'OCRC', gen_name = 'CONNECTION',
 % triggered by N-CONNECT.req from user to SCOC:
 idle(#primitive{subsystem = 'OCRC', gen_name = 'CONNECTION',
 		spec_name = indication, parameters = Params}, LoopDat) ->
+	% encode the actual SCCP message
+	EncMsg = sccp_codec:encode_sccp_msgt(?SCCP_MSGT_CR, Params),
+	% generate a MTP-TRANSFER.req primitive to the lower layer
+	send_mtp_transfer_down(LoopDat, EncMsg),
 	{next_state, idle, LoopDat}.
-
 
 send_mtp_down(#scrc_state{mtp_tx_action = MtpTxAction}, Prim) ->
 	io:format("MTP Tx ~p, Prim ~p~n", [MtpTxAction, Prim]),
@@ -159,6 +195,10 @@ send_mtp_down(#scrc_state{mtp_tx_action = MtpTxAction}, Prim) ->
 	end.
 
 send_mtp_transfer_down(LoopDat, EncMsg) ->
+	Rlbl = #mtp3_routing_label{sig_link_sel = 0, origin_pc = 123, dest_pc = 456},
+	Mtp3 = #mtp3_msg{network_ind = ?MTP3_NETIND_INTERNATIONAL,
+			 service_ind = ?MTP3_SERV_SCCP,
+			 routing_label = Rlbl, payload = EncMsg},
 	MtpPrim = #primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
-			     spec_name = request, parameters = EncMsg},
+			     spec_name = request, parameters = Mtp3},
 	send_mtp_down(LoopDat, MtpPrim).
