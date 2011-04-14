@@ -177,6 +177,7 @@ handle_info({sctp, Socket, RemoteIp, RemotePort, {_Anc, Data}}, _State, LoopDat)
 
 asp_down(#primitive{subsystem = 'M', gen_name = 'ASP_UP',
 		    spec_name = request, parameters = _Params}, LoopDat) ->
+	% M-ASP_UP.req from user, generate message and send to remote peer
 	send_msg_start_tack(LoopDat, asp_down, ?M3UA_MSGC_ASPSM, ?M3UA_MSGT_ASPSM_ASPUP, []);
 asp_down({timer_expired, t_ack, {?M3UA_MSGC_ASPSM, ?M3UA_MSGT_ASPSM_ASPUP, Params}}, LoopDat) ->
 	send_msg_start_tack(LoopDat, asp_down, ?M3UA_MSGC_ASPSM, ?M3UA_MSGT_ASPSM_ASPUP, Params);
@@ -194,6 +195,7 @@ asp_down(M3uaMsg, LoopDat) when is_record(M3uaMsg, m3ua_msg) ->
 
 asp_inactive(#primitive{subsystem = 'M', gen_name = 'ASP_ACTIVE',
 			spec_name = request, parameters = _Params}, LoopDat) ->
+	% M-ASP_ACTIVE.req from user, generate message and send to remote peer
 	send_msg_start_tack(LoopDat, asp_inactive, ?M3UA_MSGC_ASPTM, ?M3UA_MSGT_ASPTM_ASPAC,
 			   [{?M3UA_IEI_TRAF_MODE_TYPE, <<0,0,0,1>>}]);
 
@@ -202,6 +204,7 @@ asp_inactive({timer_expired, t_ack, {?M3UA_MSGC_ASPTM, ?M3UA_MSGT_ASPTM_ASPAC, P
 
 asp_inactive(#primitive{subsystem = 'M', gen_name = 'ASP_DOWN',
 		      spec_name = request, parameters = _Params}, LoopDat) ->
+	% M-ASP_DOWN.req from user, generate message and send to remote peer
 	send_msg_start_tack(LoopDat, asp_inactive, ?M3UA_MSGC_ASPSM, ?M3UA_MSGT_ASPSM_ASPDN, []);
 
 asp_inactive({timer_expired, t_ack, {?M3UA_MSGC_ASPSM, ?M3UA_MSGT_ASPSM_ASPDN, Params}}, LoopDat) ->
@@ -246,6 +249,7 @@ asp_active(#m3ua_msg{msg_class = ?M3UA_MSGC_ASPTM,
 
 asp_active(#primitive{subsystem = 'M', gen_name = 'ASP_DOWN',
 		      spec_name = request, parameters = _Params}, LoopDat) ->
+	% M-ASP_DOWN.req from user, generate message and send to remote peer
 	send_msg_start_tack(LoopDat, asp_active, ?M3UA_MSGC_ASPSM, ?M3UA_MSGT_ASPSM_ASPDN, []);
 
 asp_active({timer_expired, t_ack, {?M3UA_MSGC_ASPSM, ?M3UA_MSGT_ASPSM_ASPDN, Params}}, LoopDat) ->
@@ -253,6 +257,7 @@ asp_active({timer_expired, t_ack, {?M3UA_MSGC_ASPSM, ?M3UA_MSGT_ASPSM_ASPDN, Par
 
 asp_active(#primitive{subsystem = 'M', gen_name = 'ASP_INACTIVE',
 		      spec_name = request, parameters = _Params}, LoopDat) ->
+	% M-ASP_INACTIVE.req from user, generate message and send to remote peer
 	send_msg_start_tack(LoopDat, asp_active, ?M3UA_MSGC_ASPTM, ?M3UA_MSGT_ASPTM_ASPIA, []);
 
 asp_active({timer_expired, t_ack, {?M3UA_MSGC_ASPTM, ?M3UA_MSGT_ASPTM_ASPIA, Params}}, LoopDat) ->
@@ -260,7 +265,7 @@ asp_active({timer_expired, t_ack, {?M3UA_MSGC_ASPTM, ?M3UA_MSGT_ASPTM_ASPIA, Par
 
 asp_active(#primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
 		      spec_name = request, parameters = Params}, LoopDat) ->
-	% Send message to remote peer
+	% MTP-TRANSFER.req from user app: Send message to remote peer
 	OptList = [{?M3UA_IEI_PROTOCOL_DATA, Params}],
 	Msg = #m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_TRANSFER,
 			msg_type = ?M3UA_MSGT_XFR_DATA,
@@ -269,7 +274,7 @@ asp_active(#primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
 	{next_state, asp_active, LoopDat};
 asp_active(#m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_TRANSFER,
 		     msg_type = ?M3UA_MSGT_XFR_DATA, payload = Params}, LoopDat) ->
-	% Send primitive to the user
+	% Data transfer from remote entity: Send MTP-TRANSFER.ind primitive to the user
 	Mtp3 = proplists:get_value(?M3UA_IEI_PROTOCOL_DATA, Params),
 	send_prim_to_user(LoopDat, osmo_util:make_prim('MTP','TRANSFER',indication,[Mtp3])),
 	{next_state, asp_active, LoopDat};
@@ -309,6 +314,7 @@ rx_m3ua(Msg = #m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_MGMT,
 
 rx_m3ua(Msg = #m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_SSNM,
 		        msg_type = MsgType, payload = Params}, State, LoopDat) ->
+	% transform to classic MTP primitive and send up to the user
 	Mtp = map_ssnm_to_mtp_prim(MsgType),
 	send_prim_to_user(LoopDat, Mtp),
 	{next_state, State, LoopDat};
@@ -317,6 +323,7 @@ rx_m3ua(Msg = #m3ua_msg{}, State, LoopDat) ->
 	io:format("M3UA Unknown messge ~p in state ~p~n", [Msg, State]),
 	{next_state, State, LoopDat}.
 
+% Transform the M3UA SSNM messages into classic MTP primitives
 map_ssnm_to_mtp_prim(MsgType) ->
 	Mtp = #primitive{subsystem = 'MTP', spec_name = indiciation},
 	case MsgType of
