@@ -207,6 +207,12 @@ parse_isup_msgt(M, <<>>) when
 	M == ?ISUP_MSGT_UBL;
 	M == ?ISUP_MSGT_UBA ->
 		[];
+% Table 39/Q.763 messages for national use, fixed length 1 byte msgtype
+parse_isup_msgt(M, <<>>) when
+	M == ?ISUP_MSGT_LPA;
+	M == ?ISUP_MSGT_OLM;
+	M == ?ISUP_MSGT_UCIC ->
+		[];
 % Table C-25
 parse_isup_msgt(M, Bin) when
 	M == ?ISUP_MSGT_CGB;
@@ -436,6 +442,12 @@ encode_isup_msgt(M, #isup_msg{}) when
 	M == ?ISUP_MSGT_RSC;
 	M == ?ISUP_MSGT_UBL;
 	M == ?ISUP_MSGT_UBA ->
+		<<>>;
+% Table 39/Q.763 (national use)
+encode_isup_msgt(M, #isup_msg{}) when
+	M == ?ISUP_MSGT_LPA;
+	M == ?ISUP_MSGT_OLM;
+	M == ?ISUP_MSGT_UCIC ->
 		<<>>;
 % Table C-25
 encode_isup_msgt(M, #isup_msg{parameters = Params}) when
