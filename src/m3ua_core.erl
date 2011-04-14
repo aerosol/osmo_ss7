@@ -39,8 +39,8 @@
 	  role,		% asp | sgp
 	  asp_state,	% down, inactive, active
 	  t_ack,
-	  user_pid,
-	  user_ref,
+	  user_fun,
+	  user_args,
 	  sctp_remote_ip,
 	  sctp_remote_port,
 	  sctp_local_port,
@@ -75,8 +75,8 @@ init(InitOpts) ->
 	end,
 	{ok, SctpSock} = gen_sctp:open(OpenOpts),
 	LoopDat = #m3ua_state{role = asp, sctp_sock = SctpSock,
-				user_pid = proplists:get_value(user_pid, InitOpts),
-				user_ref = proplists:get_value(user_ref, InitOpts),
+				user_fun = proplists:get_value(user_fun, InitOpts),
+				user_args = proplists:get_value(user_args, InitOpts),
 				sctp_remote_ip = proplists:get_value(sctp_remote_ip, InitOpts),
 				sctp_remote_port = proplists:get_value(sctp_remote_port, InitOpts),
 				sctp_local_port = LocalPort},
@@ -91,20 +91,28 @@ code_change(_OldVsn, StateName, StateData, _Extra) ->
 	{ok, StateName, StateData}.
 
 % Helper function to send data to the SCTP peer
-send_sctp_to_peer(LoopDat, PktData) when is_binary(PktData) ->
+send_sctp_to_peer(LoopDat, PktData, StreamId) when is_binary(PktData) ->
 	#m3ua_state{sctp_sock = Sock, sctp_assoc_id = Assoc} = LoopDat,
-	SndRcvInfo = #sctp_sndrcvinfo{assoc_id = Assoc, ppid = 3, stream = 0},
-	gen_sctp:send(Sock, SndRcvInfo, PktData);
+	SndRcvInfo = #sctp_sndrcvinfo{assoc_id = Assoc, ppid = 3, stream = StreamId},
+	gen_sctp:send(Sock, SndRcvInfo, PktData).
 
 % same as above, but for un-encoded #m3ua_msg{}
 send_sctp_to_peer(LoopDat, M3uaMsg) when is_record(M3uaMsg, m3ua_msg) ->
 	MsgBin = m3ua_codec:encode_m3ua_msg(M3uaMsg),
-	send_sctp_to_peer(LoopDat, MsgBin).
+	StreamId = sctp_stream_for_m3ua(M3uaMsg),
+	send_sctp_to_peer(LoopDat, MsgBin, StreamId).
+
+% resolve the Stream ID depending on the m3ua_msg: 0 == management, 1 == trafic
+sctp_stream_for_m3ua(#m3ua_msg{msg_class = Class}) when
+				Class == ?M3UA_MSGC_TRANSFER ->
+	1;
+sctp_stream_for_m3ua(#m3ua_msg{}) ->
+	0.
 
 
 send_prim_to_user(LoopDat, Prim) when is_record(LoopDat, m3ua_state), is_record(Prim, primitive) ->
-	#m3ua_state{user_pid = Pid, user_ref = Ref} = LoopDat,
-	Pid ! {m3ua, Ref, Prim}.
+	#m3ua_state{user_fun = Fun, user_args = Args} = LoopDat,
+	Fun(Prim, Args).
 
 % helper to send one of the up/down/act/inact management messages + start timer
 send_msg_start_tack(LoopDat, State, MsgClass, MsgType, Params) ->
@@ -263,7 +271,7 @@ asp_active(#m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_TRANSFER,
 		     msg_type = ?M3UA_MSGT_XFR_DATA, payload = Params}, LoopDat) ->
 	% Send primitive to the user
 	Mtp3 = proplists:get_value(?M3UA_IEI_PROTOCOL_DATA, Params),
-	send_prim_to_user(LoopDat, osmo_util:make_prim('M','TRANSFER',indication,[Mtp3])),
+	send_prim_to_user(LoopDat, osmo_util:make_prim('MTP','TRANSFER',indication,[Mtp3])),
 	{next_state, asp_active, LoopDat};
 asp_active(#m3ua_msg{msg_class = ?M3UA_MSGC_ASPTM,
 		     msg_type = ?M3UA_MSGT_ASPTM_ASPIA_ACK}, LoopDat) ->
