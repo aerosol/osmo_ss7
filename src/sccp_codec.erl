@@ -235,6 +235,8 @@ gt_enc_by_odd(Odd) ->
 		2
 	end.
 
+encode_gt(undefined) ->
+	{?SCCP_GTI_NO_GT, <<>>};
 encode_gt(#global_title{gti = GTind, phone_number = PhoneNum,
 			nature_of_addr_ind = Nature,
 			trans_type = TransType, encoding = _EncOrig,
@@ -278,6 +280,14 @@ encode_ssn(SSN) ->
 			{1, <<SSN:8>>}
 	end.
 
+undef_or_true(Foo) ->
+	case Foo of
+		undefined -> 0;
+		0 -> 0;
+		_ -> 1
+	end.
+
+
 encode_sccp_addr(#sccp_addr{res_nat_use = ResNatUse,
 			    route_on_ssn = RoutInd,
 			    point_code = PointCode,
@@ -287,7 +297,9 @@ encode_sccp_addr(#sccp_addr{res_nat_use = ResNatUse,
 	{GTind, GTbin} = encode_gt(GT),
 	{SSNind, SSNbin} = encode_ssn(SSN),
 	{PCind, PCbin} = encode_pc(PointCode),
-	<<ResNatUse:1, RoutInd:1, GTind:4, SSNind:1, PCind:1, PCbin/binary, SSNbin/binary, GTbin/binary>>.
+	ResNatOut = undef_or_true(ResNatUse),
+	RoutIndOut = undef_or_true(RoutInd),
+	<<ResNatOut:1, RoutIndOut:1, GTind:4, SSNind:1, PCind:1, PCbin/binary, SSNbin/binary, GTbin/binary>>.
 
 
 encode_sccp_opt({OptNum, {DataBinLen, DataBin}}) when is_integer(OptNum) ->
