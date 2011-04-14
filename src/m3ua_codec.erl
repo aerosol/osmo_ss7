@@ -59,6 +59,8 @@ parse_m3ua_opts(OptBin, OptList) when is_binary(OptBin), is_list(OptList) ->
 
 parse_m3ua_opt(Opt = ?M3UA_IEI_PROTOCOL_DATA, MsgBin) when is_binary(MsgBin) ->
 	<<Opc:32/big, Dpc:32/big, Si:8, Ni:8, Mp:8, Sls:8, Payload/binary>> = MsgBin,
+	% The idea is to hand back a #mtp3_msg{} to make upper layers beyond
+	% MTP-TRANSFR.{ind,req} unaware of a MTP3 or M3UA lower layer
 	{Opt, #mtp3_msg{network_ind = Ni, service_ind = Si,
 			routing_label = #mtp3_routing_label{sig_link_sel = Sls,
 							    origin_pc = Opc,
@@ -90,7 +92,11 @@ encode_m3ua_opt(?M3UA_IEI_PROTOCOL_DATA, Mtp3) when is_record(Mtp3, mtp3_msg) ->
 						      origin_pc = Opc,
 						      dest_pc = Dpc},
 		  payload = Payload, m3ua_mp = Mp} = Mtp3,
-	PayBin = <<Opc:32/big, Dpc:32/big, Si:8, Ni:8, Mp:8, Sls:8, Payload/binary>>,
+	case Mp of
+		undefined -> MpD = 0;
+		_ -> MpD = Mp
+	end,
+	PayBin = <<Opc:32/big, Dpc:32/big, Si:8, Ni:8, MpD:8, Sls:8, Payload/binary>>,
 	encode_m3ua_opt(?M3UA_IEI_PROTOCOL_DATA, PayBin);
 encode_m3ua_opt(Iei, Data) when is_integer(Iei), is_binary(Data) ->
 	Length = byte_size(Data) + 4,
