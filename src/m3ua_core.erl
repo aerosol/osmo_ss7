@@ -19,6 +19,7 @@
 
 -module(m3ua_core).
 -author('Harald Welte <laforge@gnumonks.org>').
+-behaviour(gen_fsm).
 
 -include_lib("kernel/include/inet_sctp.hrl").
 -include("osmo_util.hrl").
