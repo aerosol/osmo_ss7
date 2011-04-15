@@ -120,7 +120,7 @@ parse_sccp_opts(OptBin, OptList) ->
 % Parse incoming SCCP message, one function for every message type
 parse_sccp_msgt(?SCCP_MSGT_CR, DataBin) ->
 	% first get the fixed part
-	<<_:8, SrcLocalRef:24/big, ProtoClass:8, RemainVar/binary >> = DataBin,
+	<<_:8, SrcLocalRef:24/big, PCOpt:4, ProtoClass:4, RemainVar/binary >> = DataBin,
 	% variable length fixed part
 	<<PtrVar:8, PtrOpt:8, _/binary>> = RemainVar,
 	CalledPartyLen = binary:at(RemainVar, PtrVar),
@@ -131,14 +131,16 @@ parse_sccp_msgt(?SCCP_MSGT_CR, DataBin) ->
 	OptList = parse_sccp_opts(OptBin, []),
 	%OptList = [],
 	% build parsed list of message
-	[{src_local_ref, SrcLocalRef},{protocol_class, ProtoClass},{called_party_addr, CalledPartyDec}|OptList];
+	[{src_local_ref, SrcLocalRef},{protocol_class, {ProtoClass, PCOpt}},
+	 {called_party_addr, CalledPartyDec} | OptList];
 parse_sccp_msgt(?SCCP_MSGT_CC, DataBin) ->
 	% first get the fixed part
-	<<_:8, DstLocalRef:24/big, SrcLocalRef:24/big, ProtoClass:8, Remain/binary >> = DataBin,
+	<<_:8, DstLocalRef:24/big, SrcLocalRef:24/big, PCOpt:4, ProtoClass:4, Remain/binary >> = DataBin,
 	% optional part
 	OptList = parse_sccp_opts(Remain, []),
 	% build parsed list of message
-	[{dst_local_ref, DstLocalRef},{src_local_ref, SrcLocalRef},{protocol_class, ProtoClass}|OptList];
+	[{dst_local_ref, DstLocalRef},{src_local_ref, SrcLocalRef},
+	 {protocol_class, {ProtoClass, PCOpt}} | OptList];
 parse_sccp_msgt(?SCCP_MSGT_CREF, DataBin) ->
 	% first get the fixed part
 	<<_:8, DstLocalRef:24/big, RefusalCause:8, Remain/binary >> = DataBin,
@@ -172,7 +174,7 @@ parse_sccp_msgt(?SCCP_MSGT_AK, DataBin) ->
 	<<_:8, DstLocalRef:24/big, RxSeqnr:8, Credit:8>> = DataBin,
 	[{dst_local_ref, DstLocalRef},{rx_seq_nr, RxSeqnr},{credit, Credit}];
 parse_sccp_msgt(?SCCP_MSGT_UDT, DataBin) ->
-	<<_:8, ProtoClass:8, CalledPartyPtr:8, CallingPartyPtr:8, DataPtr:8, Remain/binary >> = DataBin,
+	<<_:8, PCOpt:4, ProtoClass:4, CalledPartyPtr:8, CallingPartyPtr:8, DataPtr:8, Remain/binary >> = DataBin,
 	% variable part
 	CalledPartyLen = binary:at(Remain, CalledPartyPtr-3),
 	CalledParty = binary:part(Remain, CalledPartyPtr-3+1, CalledPartyLen),
@@ -182,7 +184,7 @@ parse_sccp_msgt(?SCCP_MSGT_UDT, DataBin) ->
 	CallingPartyDec = parse_sccp_addr(CallingParty),
 	DataLen = binary:at(Remain, DataPtr-1),
 	UserData = binary:part(Remain, DataPtr-1+1, DataLen),
-	[{protocol_class, ProtoClass},{called_party_addr, CalledPartyDec},
+	[{protocol_class, {ProtoClass, PCOpt}},{called_party_addr, CalledPartyDec},
 	 {calling_party_addr, CallingPartyDec},{user_data, UserData}];
 parse_sccp_msgt(?SCCP_MSGT_UDTS, DataBin) ->
 	<<_:8, ReturnCause:8, CalledPartyPtr:8, CallingPartyPtr:8, DataPtr:8, Remain/binary >> = DataBin,
@@ -215,9 +217,9 @@ parse_sccp_msgt(?SCCP_MSGT_ERR, DataBin) ->
 	<<_:8, DstLocalRef:24/big, ErrCause:8>> = DataBin,
 	[{dst_local_ref, DstLocalRef},{error_cause, ErrCause}];
 parse_sccp_msgt(?SCCP_MSGT_IT, DataBin) ->
-	<<_:8, DstLocalRef:24/big, SrcLocalRef:24/big, ProtoClass:8, SegmSeq:16, Credit:8>> = DataBin,
+	<<_:8, DstLocalRef:24/big, SrcLocalRef:24/big, PCOpt: 4, ProtoClass:4, SegmSeq:16, Credit:8>> = DataBin,
 	[{dst_local_ref, DstLocalRef},{src_local_ref, SrcLocalRef},
-         {protocol_class, ProtoClass},{seq_segm, SegmSeq},{credit, Credit}].
+         {protocol_class, {ProtoClass, PCOpt}},{seq_segm, SegmSeq},{credit, Credit}].
 % FIXME: XUDT/XUDTS, LUDT/LUDTS
 
 % process one incoming SCCP message
@@ -319,15 +321,15 @@ encode_sccp_opts([CurOpt|OptPropList], OptEnc) ->
 
 encode_sccp_msgt(?SCCP_MSGT_CR, Params) ->
 	SrcLocalRef = proplists:get_value(src_local_ref, Params),
-	ProtoClass = proplists:get_value(protocol_class, Params),
+	{ProtoClass, PCOpt} = proplists:get_value(protocol_class, Params),
 	OptBin = encode_sccp_opts(Params, []),
-	<<?SCCP_MSGT_CR:8, SrcLocalRef:24/big, ProtoClass:8, OptBin/binary>>;
+	<<?SCCP_MSGT_CR:8, SrcLocalRef:24/big, PCOpt:4, ProtoClass:4, OptBin/binary>>;
 encode_sccp_msgt(?SCCP_MSGT_CC, Params) ->
 	SrcLocalRef = proplists:get_value(src_local_ref, Params),
 	DstLocalRef = proplists:get_value(dst_local_ref, Params),
-	ProtoClass = proplists:get_value(protocol_class, Params),
+	{ProtoClass, PCOpt} = proplists:get_value(protocol_class, Params),
 	OptBin = encode_sccp_opts(Params, []),
-	<<?SCCP_MSGT_CC:8, DstLocalRef:24/big, SrcLocalRef:24/big, ProtoClass:8, OptBin/binary>>;
+	<<?SCCP_MSGT_CC:8, DstLocalRef:24/big, SrcLocalRef:24/big, PCOpt:4, ProtoClass:4, OptBin/binary>>;
 encode_sccp_msgt(?SCCP_MSGT_CREF, Params) ->
 	DstLocalRef = proplists:get_value(dst_local_ref, Params),
 	RefusalCause = proplists:get_value(refusal_cause, Params),
@@ -361,7 +363,7 @@ encode_sccp_msgt(?SCCP_MSGT_AK, Params) ->
 	Credit = proplists:get_value(credit, Params),
 	<<?SCCP_MSGT_AK:8, DstLocalRef:24/big, RxSeqnr:8, Credit:8>>;
 encode_sccp_msgt(?SCCP_MSGT_UDT, Params) ->
-	ProtoClass = proplists:get_value(protocol_class, Params),
+	{ProtoClass, PCOpt} = proplists:get_value(protocol_class, Params),
 	CalledParty = proplists:get_value(called_party_addr, Params),
 	CalledPartyEnc = encode_sccp_addr(CalledParty),
 	CalledPartyLen = byte_size(CalledPartyEnc),
@@ -377,7 +379,7 @@ encode_sccp_msgt(?SCCP_MSGT_UDT, Params) ->
 	Remain = <<CalledPartyLen:8, CalledPartyEnc/binary,
 		   CallingPartyLen:8, CallingPartyEnc/binary,
 		   UserDataLen:8, UserData/binary>>,
-	<<?SCCP_MSGT_UDT:8, ProtoClass:8, CalledPartyPtr:8, CallingPartyPtr:8, DataPtr:8, Remain/binary>>;
+	<<?SCCP_MSGT_UDT:8, PCOpt:4, ProtoClass:4, CalledPartyPtr:8, CallingPartyPtr:8, DataPtr:8, Remain/binary>>;
 encode_sccp_msgt(?SCCP_MSGT_UDTS, Params) ->
 	ReturnCause = proplists:get_value(return_cause, Params),
 	CalledParty = proplists:get_value(called_party_addr, Params),
@@ -421,10 +423,10 @@ encode_sccp_msgt(?SCCP_MSGT_ERR, Params) ->
 encode_sccp_msgt(?SCCP_MSGT_IT, Params) ->
 	DstLocalRef = proplists:get_value(dst_local_ref, Params),
 	SrcLocalRef = proplists:get_value(src_local_ref, Params),
-	ProtoClass = proplists:get_value(protocol_class, Params),
+	{ProtoClass, PCOpt} = proplists:get_value(protocol_class, Params),
 	SegmSeq = proplists:get_value(seq_segm, Params),
 	Credit = proplists:get_value(credit, Params),
-	<<?SCCP_MSGT_IT:8, DstLocalRef:24/big, SrcLocalRef:24/big, ProtoClass:8, SegmSeq:16, Credit:8>>.
+	<<?SCCP_MSGT_IT:8, DstLocalRef:24/big, SrcLocalRef:24/big, PCOpt:4, ProtoClass:4, SegmSeq:16, Credit:8>>.
 % FIXME: XUDT/XUDTS, LUDT/LUDTS
 
 
