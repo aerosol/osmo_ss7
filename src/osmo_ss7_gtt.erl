@@ -34,7 +34,8 @@ global_title_match([], _Gt) ->
 global_title_match([{Match, Action}|Tail], Gt) when is_record(Gt, global_title) ->
 	PhoneNumInt = osmo_util:digit_list2int(Gt#global_title.phone_number),
 	if Match#gtt_match.gt_range_from >= PhoneNumInt ->
-		% in an ordered list, we can assume that no trailing rules will match
+		% in an ordered list, we can assume that no trailing rules will
+		% match
 		false;
 	   true ->
 		case single_gt_match(Match, Gt) of
@@ -46,11 +47,13 @@ global_title_match([{Match, Action}|Tail], Gt) when is_record(Gt, global_title) 
 		end
 	end;
 % Same as above, but for SCCP Address (i.e. GT + point code and SSN)
-global_title_match([{Match, Action}|Tail], SccpAddr) when is_record(SccpAddr, sccp_addr) ->
+global_title_match([{Match, Action}|Tail], SccpAddr) when
+					is_record(SccpAddr, sccp_addr) ->
 	Gt = SccpAddr#sccp_addr.global_title,
 	PhoneNumInt = osmo_util:digit_list2int(Gt#global_title.phone_number),
 	if Match#gtt_match.gt_range_from >= PhoneNumInt ->
-		% in an ordered list, we can assume that no trailing rules will match
+		% in an ordered list, we can assume that no trailing rules will
+		% match
 		false;
 	   true ->
 		case single_gt_match(Match, SccpAddr) of
@@ -64,16 +67,22 @@ global_title_match([{Match, Action}|Tail], SccpAddr) when is_record(SccpAddr, sc
 
 
 % perform matching of a given global title against a single match
-single_gt_match(Match, Gt) when is_record(Match, gtt_match), is_record(Gt, global_title) ->
+single_gt_match(Match, Gt) when is_record(Match, gtt_match),
+				is_record(Gt, global_title) ->
 	#gtt_match{gt_range_from = RangeFrom, gt_range_to = RangeTo,
-		   numbering_plan = NumPlan, nature_of_addr_ind = NatureInd} = Match,
+		   numbering_plan = NumPlan,
+		   nature_of_addr_ind = NatureInd} = Match,
+	#global_title{phone_number = GtPhoneNum,
+		      numbering_plan = GtNumPlan,
+		      nature_of_addr_ind = GtNature} = Gt,
 	% build a list of the individual criteria that all have to match
-	SubMatchList = [{digits, {RangeFrom, RangeTo}, Gt#global_title.phone_number},
-			{numbering_plan, NumPlan, Gt#global_title.numbering_plan},
-			{nature_of_addr_ind, NatureInd, Gt#global_title.nature_of_addr_ind}],
+	SubMatchList = [{digits, {RangeFrom, RangeTo}, GtPhoneNum},
+			{numbering_plan, NumPlan, GtNumPlan},
+			{nature_of_addr_ind, NatureInd, GtNature}],
 	gt_sub_match_list(SubMatchList);
 % Same as above, but for SCCP Address (i.e. GT + point code and SSN)
-single_gt_match(Match, SccpAddr) when is_record(Match, gtt_match), is_record(SccpAddr, sccp_addr) ->
+single_gt_match(Match, SccpAddr) when is_record(Match, gtt_match),
+				      is_record(SccpAddr, sccp_addr) ->
 	#gtt_match{dpc = Dpc, ssn = Ssn} = Match,
 	Gt = SccpAddr#sccp_addr.global_title,
 	% First match the GT part
@@ -117,7 +126,8 @@ gt_sub_match(_What, MatchPart, GtPart) ->
 
 
 % Execute a single action: Replac some digits in the GT
-gtt_action(Gt, Action) when is_record(Gt, global_title), is_record(Action, gtt_act_repl_digits) ->
+gtt_action(Gt, Action) when is_record(Gt, global_title),
+			    is_record(Action, gtt_act_repl_digits) ->
 	#gtt_act_repl_digits{replace_digit_start = ReplDigStart,
 			   replace_digit_end = ReplDigEnd,
 			   new_digits = NewDigits} = Action,
@@ -127,11 +137,13 @@ gtt_action(Gt, Action) when is_record(Gt, global_title), is_record(Action, gtt_a
 	Gt#global_title{phone_number = Header ++ NewDigits ++ Trailer};
 
 % Execute a single action: Replac the numbering plan in the GT
-gtt_action(Gt, #gtt_act_repl_num_plan{numbering_plan = NewNumPlan}) when is_record(Gt, global_title) ->
+gtt_action(Gt, #gtt_act_repl_num_plan{numbering_plan = NewNumPlan})
+					when is_record(Gt, global_title) ->
 	Gt#global_title{numbering_plan = NewNumPlan};
 
 % Execute a single 'generic purpose' action that will call apply/2
-gtt_action(Gt, #gtt_act_apply{funct = Funct, args = Args}) when is_record(Gt, global_title) ->
+gtt_action(Gt, #gtt_act_apply{funct = Funct, args = Args}) when
+					is_record(Gt, global_title) ->
 	apply(Funct, Args).
 
 
@@ -145,7 +157,8 @@ apply_gtt_actions(Gt, Action) when is_record(Gt, global_title) ->
 	gtt_action(Gt, Action).
 
 % Execute a complete GTT operation: matching + executing the action
-execute_gtt(Gt, RulesList) when is_record(Gt, global_title), is_list(RulesList) ->
+execute_gtt(Gt, RulesList) when is_record(Gt, global_title),
+				is_list(RulesList) ->
 	case global_title_match(RulesList, Gt) of
 	    false ->
 		Gt;
@@ -153,7 +166,8 @@ execute_gtt(Gt, RulesList) when is_record(Gt, global_title), is_list(RulesList) 
 		apply_gtt_actions(Gt, Action)
 	end;
 % Same as above, but for SCCP Address (i.e. GT + point code and SSN)
-execute_gtt(SccpAddr, RulesList) when is_record(SccpAddr, sccp_addr), is_list(RulesList) ->
+execute_gtt(SccpAddr, RulesList) when is_record(SccpAddr, sccp_addr),
+				      is_list(RulesList) ->
 	Gt = SccpAddr#sccp_addr.global_title,
 	NewGt = execute_gtt(Gt, RulesList),
 	SccpAddr#sccp_addr{global_title = NewGt}.
