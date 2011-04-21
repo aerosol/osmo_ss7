@@ -30,7 +30,6 @@
 -define(M2UA_MAUP_MSGT_CONG_IND,	14).
 -define(M2UA_MAUP_MSGT_DATA_ACK,	15).
 
-
 -define(M2UA_ASPSM_MSGT_UP,		0).
 -define(M2UA_ASPSM_MSGT_DOWN,		1).
 -define(M2UA_ASPSM_MSGT_BEAT,		2).
@@ -50,6 +49,28 @@
 -define(M2UA_MGMT_IIM_REG_RSP,		2).
 -define(M2UA_MGMT_IIM_DEREG_REQ,	3).
 -define(M2UA_MGMT_IIM_DEREG_RSP,	4).
+
+% RFC 3331 Section 3.1.6 Common Parameter Tags
+% 0: reserved
+-define(M2UA_P_COM_INTF_ID_INT,		1).
+% 2: unused
+-define(M2UA_P_COM_INTF_ID_TEXT,	3).
+-define(M2UA_P_COM_INFO_STRING,		4).
+% 5: unused
+% 6: unused
+-define(M2UA_P_COM_DIAG_INFO,		7).
+-define(M2UA_P_COM_INTF_ID_INT_RANGE,	8).
+-define(M2UA_P_COM_HEARTB_DATA,		9).
+% 10: unused
+-define(M2UA_P_COM_TRAF_MODE_T,		11).
+-define(M2UA_P_COM_ERR_CODE,		12).
+-define(M2UA_P_COM_STATUS_T,		13).
+% 14: unused
+% 15: unused
+% 16: unused
+-define(M2UA_P_COM_ASP_ID,		17).
+% 18: unused
+-define(M2UA_P_COM_CORREL_ID,		19).
 
 -record(m2ua_msg, {
 	msg_class,
