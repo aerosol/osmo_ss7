@@ -35,18 +35,6 @@
 	}).
 % TODO: 
 
-% is the supplied message type a connectionless message?
-is_connectionless(MsgType) ->
-	case MsgType of
-		?SCCP_MSGT_UDT -> true;
-		?SCCP_MSGT_UDTS -> true;
-		?SCCP_MSGT_XUDT -> true;
-		?SCCP_MSGT_XUDTS -> true;
-		?SCCP_MSGT_LUDT -> true;
-		?SCCP_MSGT_LUDTS -> true;
-		_ -> false
-	end.
-
 tx_prim_to_local_ref(Prim, LocalRef) ->
 	% determine the Pid to which the primitive must be sent
 	ConnTable = get(scoc_by_ref),
@@ -130,7 +118,7 @@ idle(#primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
 		% T(ias) expired on the other end of the connection
 		%#sccp_msg{msg_type = ?SCCP_MSGT_IT} ->
 		_ ->
-			IsConnLess = is_connectionless(Msg#sccp_msg.msg_type),
+			IsConnLess = sccp_codec:is_connectionless(Msg),
 			case IsConnLess of
 				true ->
 					% it would be more proper to send them via SCLC ??

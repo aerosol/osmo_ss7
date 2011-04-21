@@ -21,7 +21,8 @@
 -author('Harald Welte <laforge@gnumonks.org>').
 -include("sccp.hrl").
 
--export([parse_sccp_msg/1, encode_sccp_msg/1, encode_sccp_msgt/2]).
+-export([parse_sccp_msg/1, encode_sccp_msg/1, encode_sccp_msgt/2,
+	 is_connectionless/1]).
 
 -compile(export_all).
 
@@ -433,3 +434,17 @@ encode_sccp_msgt(?SCCP_MSGT_IT, Params) ->
 % encode one sccp message data structure into the on-wire format
 encode_sccp_msg(#sccp_msg{msg_type = MsgType, parameters = Params}) ->
 	encode_sccp_msgt(MsgType, Params).
+
+% is the supplied message type a connectionless message?
+is_connectionless(#sccp_msg{msg_type = MsgType}) ->
+	is_connectionless(MsgType);
+is_connectionless(MsgType) ->
+	case MsgType of
+		?SCCP_MSGT_UDT -> true;
+		?SCCP_MSGT_UDTS -> true;
+		?SCCP_MSGT_XUDT -> true;
+		?SCCP_MSGT_XUDTS -> true;
+		?SCCP_MSGT_LUDT -> true;
+		?SCCP_MSGT_LUDTS -> true;
+		_ -> false
+	end.
