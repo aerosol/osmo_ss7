@@ -82,7 +82,8 @@ init(InitOpts) ->
 				sctp_remote_port = proplists:get_value(sctp_remote_port, InitOpts),
 				sctp_local_port = LocalPort},
 	LoopDat2 = reconnect_sctp(LoopDat),
-	{ok, asp_down, LoopDat2}.
+        InitState = proplists:get_value(init_state, InitOpts, asp_down),
+	{ok, InitState, LoopDat2}.
 
 terminate(Reason, _State, LoopDat) ->
 	io:format("Terminating ~p (Reason: ~p)~n", [?MODULE, Reason]),
@@ -221,9 +222,9 @@ asp_inactive(#m3ua_msg{msg_class = ?M3UA_MSGC_ASPTM,
 	send_prim_to_user(LoopDat, osmo_util:make_prim('M','ASP_ACTIVE',confirm)),
 	{next_state, asp_active, LoopDat};
 
-asp_inactive(hack_force_activate, LoopDat) ->
-	send_prim_to_user(LoopDat, osmo_util:make_prim('M','ASP_ACTIVE',confirm)),
-	{next_state, asp_active, LoopDat};
+%asp_inactive(hack_force_activate, LoopDat) ->
+	%send_prim_to_user(LoopDat, osmo_util:make_prim('M','ASP_ACTIVE',confirm)),
+	%{next_state, asp_active, LoopDat};
 
 asp_inactive(#m3ua_msg{msg_class = ?M3UA_MSGC_ASPSM,
 		       msg_type = ?M3UA_MSGT_ASPSM_ASPDN_ACK}, LoopDat) ->
@@ -297,7 +298,9 @@ asp_active(M3uaMsg, LoopDat) when is_record(M3uaMsg, m3ua_msg) ->
 
 
 rx_sctp(_Anc, Data, State, LoopDat) ->
+        io:format("Data: ~p~n", [Data]),
 	M3uaMsg = m3ua_codec:parse_m3ua_msg(Data),
+        io:format("M3UA Core recieved: ~p~n", [M3uaMsg]),
 	gen_fsm:send_event(self(), M3uaMsg),
 	{next_state, State, LoopDat}.
 
@@ -337,6 +340,7 @@ rx_m3ua(Msg = #m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_ASPSM,
 rx_m3ua(Msg = #m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_ASPTM,
                         msg_type = ?M3UA_MSGT_ASPTM_ASPAC}, State, LoopDat) ->
         io:format("Remote ASP is active!~n"),
+        send_sctp_to_peer(LoopDat, Msg#m3ua_msg{msg_type = ?M3UA_MSGT_ASPTM_ASPAC_ACK}),
 	send_prim_to_user(LoopDat, osmo_util:make_prim('M','RMT_ASP_ACTIVE',confirm)),
         {next_state, State, LoopDat};
 
