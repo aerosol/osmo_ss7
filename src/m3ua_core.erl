@@ -75,7 +75,7 @@ init(InitOpts) ->
 			OpenOpts = OpenOptsBase ++ [{port, LocalPort}]
 	end,
 	{ok, SctpSock} = gen_sctp:open(OpenOpts),
-	LoopDat = #m3ua_state{role = asp, sctp_sock = SctpSock,
+	LoopDat = #m3ua_state{role = sgp, sctp_sock = SctpSock,
 				user_fun = proplists:get_value(user_fun, InitOpts),
 				user_args = proplists:get_value(user_args, InitOpts),
 				sctp_remote_ip = proplists:get_value(sctp_remote_ip, InitOpts),
@@ -320,9 +320,24 @@ rx_m3ua(Msg = #m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_SSNM,
 	send_prim_to_user(LoopDat, Mtp),
 	{next_state, State, LoopDat};
 
+%% Receive ASP UP (State Maintance), reply with ASP UP ACK to remote peer
+rx_m3ua(Msg = #m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_ASPSM,
+                        msg_type = ?M3UA_MSGT_ASPSM_ASPUP}, State, LoopDat) ->
+        send_sctp_to_peer(LoopDat, Msg#m3ua_msg{msg_type = ?M3UA_MSGT_ASPSM_ASPUP_ACK}),
+        {next_state, State, LoopDat};
+
+%% v1, c4, t1 (12,[{11,<<0,0,0,2>>}]})
+%% Remote ASP Active
+rx_m3ua(Msg = #m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_ASPTM,
+                        msg_type = ?M3UA_MSGT_ASPTM_ASPAC}, State, LoopDat) ->
+        io:format("Remote ASP is active!~n"),
+	send_prim_to_user(LoopDat, osmo_util:make_prim('M','RMT_ASP_ACTIVE',confirm)),
+        {next_state, State, LoopDat};
+
 rx_m3ua(Msg = #m3ua_msg{}, State, LoopDat) ->
 	io:format("M3UA Unknown messge ~p in state ~p~n", [Msg, State]),
 	{next_state, State, LoopDat}.
+
 
 % Transform the M3UA SSNM messages into classic MTP primitives
 map_ssnm_to_mtp_prim(MsgType) ->
