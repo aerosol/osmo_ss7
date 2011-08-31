@@ -6,9 +6,9 @@
 			bssmap_codec,
 			isup_codec,
 			m2ua_codec,
-			m3ua_codec, m3ua_core, m3ua_example,
+			m3ua_codec, m3ua_core
 			mtp3_codec,
-			sccp_codec, sccp_scoc,  sccp_scrc,
+			sccp_codec, sccp_scrc,
 			osmo_ss7_gtt,
 			osmo_ss7_pcap
 		]},

@@ -78,7 +78,7 @@ rx_m3ua_prim(P, _L) ->
 tx_sccp_udt(ScrcPid) ->
 	CallingP = #sccp_addr{ssn = ?SCCP_SSN_MSC, point_code = osmo_util:pointcode2int(itu, {1,2,2})},
 	CalledP = #sccp_addr{ssn = ?SCCP_SSN_HLR, point_code = osmo_util:pointcode2int(itu, {1,1,1})},
-	Data = <<"hello world">>,
+	Data = <<100,6,73,4,53,33,191,30>>,
         Opts = [{protocol_class, {0, 0}}, {called_party_addr, CalledP},
 		{calling_party_addr, CallingP}, {user_data, Data}],
 	io:format("Example: Sending N-UNITDATA.req to SCRC~n"),
