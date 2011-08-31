@@ -119,6 +119,7 @@ send_prim_to_user(LoopDat, Prim) when is_record(LoopDat, m3ua_state), is_record(
 send_msg_start_tack(LoopDat, State, MsgClass, MsgType, Params) ->
 	% generate and send the respective message
 	Msg = #m3ua_msg{version = 1, msg_class = MsgClass, msg_type = MsgType, payload = Params},
+        io:format("Sending message class ~p to peer (~p)...~n", [MsgClass, MsgType]),
 	send_sctp_to_peer(LoopDat, Msg),
 	% start T(ack) timer and wait for ASP_UP_ACK
 	timer:cancel(LoopDat#m3ua_state.t_ack),
@@ -197,8 +198,9 @@ asp_down(M3uaMsg, LoopDat) when is_record(M3uaMsg, m3ua_msg) ->
 asp_inactive(#primitive{subsystem = 'M', gen_name = 'ASP_ACTIVE',
 			spec_name = request, parameters = _Params}, LoopDat) ->
 	% M-ASP_ACTIVE.req from user, generate message and send to remote peer
+        %% changed traffic mode type to loadshare for tieto stack testing purposes
 	send_msg_start_tack(LoopDat, asp_inactive, ?M3UA_MSGC_ASPTM, ?M3UA_MSGT_ASPTM_ASPAC,
-			   [{?M3UA_IEI_TRAF_MODE_TYPE, <<0,0,0,1>>}]);
+			   [{?M3UA_IEI_TRAF_MODE_TYPE, <<0,0,0,2>>}]); 
 
 asp_inactive({timer_expired, t_ack, {?M3UA_MSGC_ASPTM, ?M3UA_MSGT_ASPTM_ASPAC, Params}}, LoopDat) ->
 	send_msg_start_tack(LoopDat, asp_inactive, ?M3UA_MSGC_ASPTM, ?M3UA_MSGT_ASPTM_ASPAC, Params);
@@ -216,6 +218,10 @@ asp_inactive(#m3ua_msg{msg_class = ?M3UA_MSGC_ASPTM,
 	timer:cancel(LoopDat#m3ua_state.t_ack),
 	% transition into ASP_ACTIVE
 	% signal this to the user
+	send_prim_to_user(LoopDat, osmo_util:make_prim('M','ASP_ACTIVE',confirm)),
+	{next_state, asp_active, LoopDat};
+
+asp_inactive(hack_force_activate, LoopDat) ->
 	send_prim_to_user(LoopDat, osmo_util:make_prim('M','ASP_ACTIVE',confirm)),
 	{next_state, asp_active, LoopDat};
 

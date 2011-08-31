@@ -31,6 +31,7 @@ init() ->
 	{ok, M3uaPid} = m3ua_core:start_link(Opts),
 	% instantiate SCCP routing instance
 	{ok, ScrcPid} = sccp_scrc:start_link([{mtp_tx_action, {callback_fn, fun scrc_tx_to_mtp/2, M3uaPid}}]),
+        io:format("=== M3UACORE ~p, SCRC ~p~n", [M3uaPid, ScrcPid]),
 	loop(#loop_dat{m3ua_pid = M3uaPid, scrc_pid = ScrcPid}).
 
 loop(L) ->
@@ -61,9 +62,13 @@ rx_m3ua_prim(#primitive{subsystem = 'M', gen_name = 'SCTP_ESTABLISH', spec_name 
 rx_m3ua_prim(#primitive{subsystem = 'M', gen_name = 'ASP_UP', spec_name = confirm}, L) ->
 	gen_fsm:send_event(L#loop_dat.m3ua_pid, osmo_util:make_prim('M','ASP_ACTIVE',request));
 
+rx_m3ua_prim(#primitive{subsystem = 'M', gen_name = 'ASP_ACTIVE', spec_name = confirm}, L) ->
+        io:format("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+
 rx_m3ua_prim(#primitive{subsystem = 'M', gen_name = 'RMT_ASP_ACTIVE', spec_name = confirm}, L) ->
-	io:format("Example: M3UA now active and ready~n"),
-	tx_sccp_udt(L#loop_dat.scrc_pid);
+	io:format("Example: remote peer now active and ready~n"),
+        gen_fsm:send_event(L#loop_dat.m3ua_pid, hack_force_activate),
+        tx_sccp_udt(L#loop_dat.scrc_pid);
 
 rx_m3ua_prim(P, _L) ->
 	io:format("Example: Ignoring M3UA prim ~p~n", [P]),
@@ -73,9 +78,9 @@ rx_m3ua_prim(P, _L) ->
 tx_sccp_udt(ScrcPid) ->
 	CallingP = #sccp_addr{ssn = ?SCCP_SSN_MSC, point_code = osmo_util:pointcode2int(itu, {1,2,2})},
 	CalledP = #sccp_addr{ssn = ?SCCP_SSN_HLR, point_code = osmo_util:pointcode2int(itu, {1,1,1})},
-	Data = <<1,2,3,4>>,
-	Opts = [{protocol_class, 0}, {called_party_addr, CalledP},
+	Data = <<"hello world">>,
+        Opts = [{protocol_class, {0, 0}}, {called_party_addr, CalledP},
 		{calling_party_addr, CallingP}, {user_data, Data}],
 	io:format("Example: Sending N-UNITDATA.req to SCRC~n"),
-	gen_fsm:send_event(ScrcPid, osmo_util:make_prim('N','UNITDATA',request,Opts)).
+        gen_fsm:send_event(ScrcPid, osmo_util:make_prim('N','UNITDATA',request,Opts)).
 
