@@ -62,6 +62,7 @@ reconnect_sctp(L = #m3ua_state{sctp_remote_ip = Ip, sctp_remote_port = Port, sct
 			L#m3ua_state{sctp_assoc_id = Assoc#sctp_assoc_change.assoc_id};
 		{error, Error } ->
 			io:format("SCTP Error ~p, reconnecting~n", [Error]),
+                        timer:sleep(5000),
 			reconnect_sctp(L)
 	end.
 
@@ -141,7 +142,7 @@ handle_info({sctp, Socket, _RemoteIp, _RemotePort, {ANC, SAC}},
 	io:format("SCTP Assoc Change ~p ~p~n", [ANC, SAC]),
 	#sctp_assoc_change{state = SacState, outbound_streams = _OutStreams,
 			   inbound_streams = _InStreams, assoc_id = _AssocId} = SAC,
-	case SacState of 
+	case SacState of
 		comm_up ->
 			% primmitive to the user
 			send_prim_to_user(LoopDat, osmo_util:make_prim('M','SCTP_ESTABLISH',confirm)),
@@ -157,7 +158,7 @@ handle_info({sctp, Socket, _RemoteIp, _RemotePort, {ANC, SAC}},
 
 handle_info({sctp, Socket, RemoteIp, RemotePort, {[Anc], Data}}, State, LoopDat) ->
 	io:format("SCTP rx data: ~p ~p~n", [Anc, Data]),
-	% process incoming SCTP data 
+	% process incoming SCTP data
 	if Socket == LoopDat#m3ua_state.sctp_sock,
 	   RemoteIp == LoopDat#m3ua_state.sctp_remote_ip,
 	   RemotePort == LoopDat#m3ua_state.sctp_remote_port,
@@ -201,7 +202,7 @@ asp_inactive(#primitive{subsystem = 'M', gen_name = 'ASP_ACTIVE',
 	% M-ASP_ACTIVE.req from user, generate message and send to remote peer
         %% changed traffic mode type to loadshare for tieto stack testing purposes
 	send_msg_start_tack(LoopDat, asp_inactive, ?M3UA_MSGC_ASPTM, ?M3UA_MSGT_ASPTM_ASPAC,
-			   [{?M3UA_IEI_TRAF_MODE_TYPE, <<0,0,0,2>>}]); 
+			   [{?M3UA_IEI_TRAF_MODE_TYPE, <<0,0,0,2>>}]);
 
 asp_inactive({timer_expired, t_ack, {?M3UA_MSGC_ASPTM, ?M3UA_MSGT_ASPTM_ASPAC, Params}}, LoopDat) ->
 	send_msg_start_tack(LoopDat, asp_inactive, ?M3UA_MSGC_ASPTM, ?M3UA_MSGT_ASPTM_ASPAC, Params);

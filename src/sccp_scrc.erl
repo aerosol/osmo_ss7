@@ -48,14 +48,19 @@ terminate(Reason, _State, _LoopDat) ->
 	ok.
 
 % N-UNITDATA.req from user (normally this is SCLC, but we don't have SCLC)
-idle(P= #primitive{subsystem = 'N', gen_name = 'UNITDATA',
+idle(#primitive{subsystem = 'N', gen_name = 'UNITDATA',
 		   spec_name = request, parameters = Params}, LoopDat) ->
 	% User needs to specify: Protocol Class, Called Party, Calling Party, Data
 	% FIXME: implement XUDT / LUDT support
 	% encode the actual SCCP message
+        CingP = proplists:get_value(calling_party_addr, Params),
+        CedP = proplists:get_value(called_party_addr, Params),
+        OPC = CedP#sccp_addr.point_code,
+        DPC = CingP#sccp_addr.point_code,
+        io:format("DPC ~p~n", [DPC]),
 	EncMsg = sccp_codec:encode_sccp_msgt(?SCCP_MSGT_UDT, Params),
 	% generate a MTP-TRANSFER.req primitive to the lower layer
-	send_mtp_transfer_down(LoopDat, EncMsg),
+	send_mtp_transfer_down(LoopDat, EncMsg, OPC, DPC),
 	{next_state, idle, LoopDat};
 
 idle(#primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
@@ -71,10 +76,10 @@ idle(#primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
 			IsConnLess = sccp_codec:is_connectionless(Msg),
 			case IsConnLess of
 				true ->
-					UserPid = LoopDat#scrc_state.user_pid,
-					% FIXME: N-NOTICE.ind for NOTICE 
-					UserPrim = osmo_util:make_prim('N','UNITDATA', indication, Msg),
-					UserPid ! {sccp, UserPrim};
+                                    UserPid = LoopDat#scrc_state.user_pid,
+                                    % FIXME: N-NOTICE.ind for NOTICE
+                                    UserPrim = osmo_util:make_prim('N','UNITDATA', indication, Msg),
+                                    UserPid ! {sccp, UserPrim};
                                 _Oops ->
                                     io:format("This should be here - we're connection less now! ~p~n", [Msg])
 			end
@@ -94,8 +99,8 @@ send_mtp_down(#scrc_state{mtp_tx_action = MtpTxAction}, Prim) ->
 			{error, "Unknown MtpTxAction"}
 	end.
 
-send_mtp_transfer_down(LoopDat, EncMsg) ->
-	Rlbl = #mtp3_routing_label{sig_link_sel = 0, origin_pc = 123, dest_pc = 456},
+send_mtp_transfer_down(LoopDat, EncMsg, OPC, DPC) ->
+	Rlbl = #mtp3_routing_label{sig_link_sel = 0, origin_pc = OPC, dest_pc = DPC},
 	Mtp3 = #mtp3_msg{network_ind = ?MTP3_NETIND_INTERNATIONAL,
 			 service_ind = ?MTP3_SERV_SCCP,
 			 routing_label = Rlbl, payload = EncMsg},
