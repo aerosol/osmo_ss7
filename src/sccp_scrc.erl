@@ -31,6 +31,10 @@
 		mtp_tx_action	% action to be performed for MTP-TRANSFER.req
 	}).
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                   API                                   %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 start_link(InitData) ->
 	% make sure to store the Pid of the caller in the scrc_state
 	gen_fsm:start_link(sccp_scrc, [{user_pid,self()}|InitData], [{debug, [trace]}]).
@@ -47,6 +51,10 @@ terminate(Reason, _State, _LoopDat) ->
 	io:format("SCRC: Terminating with reason ~p~n", [Reason]),
 	ok.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                          FSM callbacks (states)                         %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 % N-UNITDATA.req from user (normally this is SCLC, but we don't have SCLC)
 idle(#primitive{subsystem = 'N', gen_name = 'UNITDATA',
 		   spec_name = request, parameters = Params}, LoopDat) ->
@@ -58,38 +66,45 @@ idle(#primitive{subsystem = 'N', gen_name = 'UNITDATA',
         OPC = CedP#sccp_addr.point_code,
         DPC = CingP#sccp_addr.point_code,
         io:format("DPC ~p~n", [DPC]),
+        scrc_gtt:needs_translation(CedP),
 	EncMsg = sccp_codec:encode_sccp_msgt(?SCCP_MSGT_UDT, Params),
 	% generate a MTP-TRANSFER.req primitive to the lower layer
 	send_mtp_transfer_down(LoopDat, EncMsg, OPC, DPC),
 	{next_state, idle, LoopDat};
 
-idle(#primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
-		spec_name = indication, parameters = Params}, LoopDat) ->
-	{ok, Msg} = sccp_codec:parse_sccp_msg(Params#mtp3_msg.payload),
-	io:format("Parsed Msg: ~p LoopDat ~p ~n", [Msg, LoopDat]),
-	case Msg of
-		% special handling for CR message here in SCRC
-		#sccp_msg{msg_type = ?SCCP_MSGT_CR} ->
-                    io:format("This should be here - we're connection less now! ~p~n", [Msg]);
-		%#sccp_msg{msg_type = ?SCCP_MSGT_IT} ->
-		_ ->
-			IsConnLess = sccp_codec:is_connectionless(Msg),
-			case IsConnLess of
-				true ->
-                                    UserPid = LoopDat#scrc_state.user_pid,
-                                    % FIXME: N-NOTICE.ind for NOTICE
-                                    UserPrim = osmo_util:make_prim('N','UNITDATA', indication, Msg),
-                                    UserPid ! {sccp, UserPrim};
-                                _Oops ->
-                                    io:format("This should be here - we're connection less now! ~p~n", [Msg])
-			end
-	end,
-	{next_state, idle, LoopDat};
+%idle(#primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
+		%spec_name = indication, parameters = Params}, LoopDat) ->
+	%{ok, Msg} = sccp_codec:parse_sccp_msg(Params#mtp3_msg.payload),
+	%io:format("Parsed Msg: ~p LoopDat ~p ~n", [Msg, LoopDat]),
+	%case Msg of
+		%% special handling for CR message here in SCRC
+		%#sccp_msg{msg_type = ?SCCP_MSGT_CR} ->
+                    %io:format("This should be here - we're connection less now! ~p~n", [Msg]);
+		%%#sccp_msg{msg_type = ?SCCP_MSGT_IT} ->
+		%_ ->
+			%IsConnLess = sccp_codec:is_connectionless(Msg),
+			%case IsConnLess of
+				%true ->
+                                    %UserPid = LoopDat#scrc_state.user_pid,
+                                    %% FIXME: N-NOTICE.ind for NOTICE
+                                    %UserPrim = osmo_util:make_prim('N','UNITDATA', indication, Msg),
+                                    %UserPid ! {sccp, UserPrim};
+                                %_Oops ->
+                                    %io:format("This should be here - we're connection less now! ~p~n", [Msg])
+			%end
+	%end,
+	%{next_state, idle, LoopDat};
 
-idle(sclc_scrc_connless_msg, LoopDat) ->
-	% FIXME: get to MTP-TRANSFER.req
-	{next_state, idle, LoopDat}.
+%idle(sclc_scrc_connless_msg, LoopDat) ->
+	%% FIXME: get to MTP-TRANSFER.req
+	%{next_state, idle, LoopDat}.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                           Layer communication                           %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% execute user callback function with MTP3 message
+%%
 send_mtp_down(#scrc_state{mtp_tx_action = MtpTxAction}, Prim) ->
 	io:format("MTP Tx ~p, Prim ~p~n", [MtpTxAction, Prim]),
 	case MtpTxAction of
@@ -99,6 +114,8 @@ send_mtp_down(#scrc_state{mtp_tx_action = MtpTxAction}, Prim) ->
 			{error, "Unknown MtpTxAction"}
 	end.
 
+%% encode MTP3 message, pass it to the lower layer within proper primitive
+%%
 send_mtp_transfer_down(LoopDat, EncMsg, OPC, DPC) ->
 	Rlbl = #mtp3_routing_label{sig_link_sel = 0, origin_pc = OPC, dest_pc = DPC},
 	Mtp3 = #mtp3_msg{network_ind = ?MTP3_NETIND_INTERNATIONAL,

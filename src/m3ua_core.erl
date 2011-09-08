@@ -37,17 +37,22 @@
 
 % Loop Data
 -record(m3ua_state, {
-	  role,		% asp | sgp
+	  role,		% asp | sgp %% this isn't used anywhere
 	  asp_state,	% down, inactive, active
 	  t_ack,
-	  user_fun,
-	  user_args,
+	  user_fun,     % how to deliver primitives to the user layer
+	  user_args,    % user process Pid
 	  sctp_remote_ip,
 	  sctp_remote_port,
 	  sctp_local_port,
 	  sctp_sock,
 	  sctp_assoc_id
 	}).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                     API & SCTP Link initialization                      %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 
 start_link(InitOpts) ->
 	gen_fsm:start_link(?MODULE, InitOpts, [{debug, [trace]}]).
@@ -93,6 +98,10 @@ terminate(Reason, _State, LoopDat) ->
 code_change(_OldVsn, StateName, StateData, _Extra) ->
 	{ok, StateName, StateData}.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                            Helper functions                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 % Helper function to send data to the SCTP peer
 send_sctp_to_peer(LoopDat, PktData, StreamId) when is_binary(PktData) ->
 	#m3ua_state{sctp_sock = Sock, sctp_assoc_id = Assoc} = LoopDat,
@@ -111,7 +120,6 @@ sctp_stream_for_m3ua(#m3ua_msg{msg_class = Class}) when
 	1;
 sctp_stream_for_m3ua(#m3ua_msg{}) ->
 	0.
-
 
 send_prim_to_user(LoopDat, Prim) when is_record(LoopDat, m3ua_state), is_record(Prim, primitive) ->
 	#m3ua_state{user_fun = Fun, user_args = Args} = LoopDat,
@@ -136,6 +144,9 @@ handle_event(Event, State, LoopDat) ->
 	{next_state, State, LoopDat}.
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                   Handle SCTP communication messages                    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 handle_info({sctp, Socket, _RemoteIp, _RemotePort, {ANC, SAC}},
 	     _State, LoopDat) when is_record(SAC, sctp_assoc_change) ->
@@ -177,7 +188,9 @@ handle_info({sctp, Socket, RemoteIp, RemotePort, {_Anc, Data}}, _State, LoopDat)
 	inet:setopts(Socket, [{active, once}]),
 	{next_state, asp_down, LoopDat}.
 
-
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                        Application Server states                        %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 asp_down(#primitive{subsystem = 'M', gen_name = 'ASP_UP',
 		    spec_name = request, parameters = _Params}, LoopDat) ->
@@ -297,6 +310,10 @@ asp_active(M3uaMsg, LoopDat) when is_record(M3uaMsg, m3ua_msg) ->
 	rx_m3ua(M3uaMsg, asp_active, LoopDat).
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                    Receiver functions (SCTP / M3UA)                     %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 
 rx_sctp(_Anc, Data, State, LoopDat) ->
         io:format("Data: ~p~n", [Data]),
@@ -304,7 +321,6 @@ rx_sctp(_Anc, Data, State, LoopDat) ->
         io:format("M3UA Core recieved: ~p~n", [M3uaMsg]),
 	gen_fsm:send_event(self(), M3uaMsg),
 	{next_state, State, LoopDat}.
-
 
 
 rx_m3ua(Msg = #m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_MGMT,
