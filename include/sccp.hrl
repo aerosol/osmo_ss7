@@ -77,11 +77,26 @@
 
 
 -record(global_title, {
+          %% 3.4.1/Q.713 and 3.4.2.3/Q.713
+          %% ?SCCP_GTI_*
 	  gti,
+
+          %% 3.4.2.3.1/Q.713
+          %% international number - 4
+          %% unknown -0
 	  nature_of_addr_ind,
+
+          %% 3.4.2.3.2/Q.713
 	  trans_type,
+
+          %% 3.4.2.3/Q.713
 	  encoding,
+
+          %% 3.4.2.3.3/Q.713
+          %% 2 - generic numbering plan
+          %% 0 - unknown
 	  numbering_plan,
+
 	  phone_number
 	}).
 

@@ -61,15 +61,31 @@ idle(#primitive{subsystem = 'N', gen_name = 'UNITDATA',
 	% User needs to specify: Protocol Class, Called Party, Calling Party, Data
 	% FIXME: implement XUDT / LUDT support
 	% encode the actual SCCP message
+        io:format("------------------------~n"),
+        io:format("~p~n", [Params]),
+        io:format("------------------------~n"),
         CingP = proplists:get_value(calling_party_addr, Params),
         CedP = proplists:get_value(called_party_addr, Params),
         OPC = CedP#sccp_addr.point_code,
         DPC = CingP#sccp_addr.point_code,
         io:format("DPC ~p~n", [DPC]),
-        scrc_gtt:needs_translation(CedP),
+        case scrc_gtt:needs_translation(CedP) of
+            true ->
+                TranslatedPC = 101; %% TODO
+
+            %[{protocol_class,{1,0}},
+             %{called_party_addr,
+                 %{sccp_addr,undefined,undefined,undefined,undefined,
+                     %{global_title,1,0,undefined,undefined,undefined,"48111222333"}}},
+             %{calling_party_addr,{sccp_addr,undefined,undefined,101,123,undefined}},
+             %{user_data,<<"message">>}]
+
+            false ->
+                TranslatedPC = DPC
+        end,
 	EncMsg = sccp_codec:encode_sccp_msgt(?SCCP_MSGT_UDT, Params),
 	% generate a MTP-TRANSFER.req primitive to the lower layer
-	send_mtp_transfer_down(LoopDat, EncMsg, OPC, DPC),
+	send_mtp_transfer_down(LoopDat, EncMsg, OPC, TranslatedPC),
 	{next_state, idle, LoopDat}.
 
 %idle(#primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
@@ -117,6 +133,7 @@ send_mtp_down(#scrc_state{mtp_tx_action = MtpTxAction}, Prim) ->
 %% encode MTP3 message, pass it to the lower layer within proper primitive
 %%
 send_mtp_transfer_down(LoopDat, EncMsg, OPC, DPC) ->
+        %% TODO routing label destination point code
 	Rlbl = #mtp3_routing_label{sig_link_sel = 0, origin_pc = OPC, dest_pc = DPC},
 	Mtp3 = #mtp3_msg{network_ind = ?MTP3_NETIND_INTERNATIONAL,
 			 service_ind = ?MTP3_SERV_SCCP,

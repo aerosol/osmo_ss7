@@ -153,8 +153,13 @@ rx_m3ua_prim(#primitive{subsystem = 'M', gen_name = 'RMT_ASP_ACTIVE', spec_name 
         point_code = ?LOCAL_PC
     },
     CalledP = #sccp_addr{
-        ssn = ?T_ST_SSN,
-        point_code = ?T_ST_PC
+        %ssn = ?T_ST_SSN,
+        %point_code = ?T_ST_PC
+        global_title = #global_title{
+            phone_number = "48111222333",
+            gti = ?SCCP_GTI_NAT_ONLY,
+            nature_of_addr_ind = 0
+        }
     },
     Data = <<"message">>,
     tx_sccp_udt(L#loop_dat.scrc_pid, CallingP, CalledP, Data, 1);
