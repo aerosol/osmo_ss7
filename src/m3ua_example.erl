@@ -12,6 +12,14 @@
 	 m3ua_pids
 	}).
 
+-define(T_ST_PC, osmo_util:pointcode2int(itu, {0,0,1})). %% 1
+-define(T_ST_SSN, 147).
+-define(T_ST_GT, 48507999970).
+-define(T_ST_ROUT_CTX, 1).
+-define(LOCAL_PC, osmo_util:pointcode2int(itu, {0, 12, 5})). %% 101
+-define(LOCAL_SSN, 123).
+
+
 %%%%%%%
 % API %
 %%%%%%%
@@ -20,8 +28,6 @@ init() ->
     dpc_map = ets:new(dpc_map, [set, named_table]),
     linksets:start(),
     LinkSets = confetti:fetch(linksets),
-    %% Spawn M3UA connections and perform DPC-Link mapping
-    M3uaPids = lists:map(fun spawn_m3ua/1, LinkSets),
     %% One SCRC is enough right now -- callback fn is used by SCRC
     %% to notify lower layers.
     %% I.e. after UDT message is encoded, SCRC sends the encoded
@@ -29,6 +35,8 @@ init() ->
     %% function, that will use the callback internally
     {ok, ScrcPid} = sccp_scrc:start_link([
             {mtp_tx_action, {callback_fn, fun scrc_tx_to_mtp/2, []}}]),
+    %% Spawn M3UA connections and perform DPC-Link mapping
+    M3uaPids = lists:map(fun spawn_m3ua/1, LinkSets),
     loop(#loop_dat{m3ua_pids = M3uaPids, scrc_pid = ScrcPid}).
 
 
@@ -70,7 +78,7 @@ loop(L) ->
 %% equivalent to a link and a group of SCTP associations betweeen
 %% ASP and SGP for the same AS and SG is equivalent to a linkset.
 %%
-spawn_m3ua(Conn = {Name, [{remote_ip, Ip}, {remote_port, Port},
+spawn_m3ua(_Conn = {Name, [{remote_ip, Ip}, {remote_port, Port},
             {local_port, LPort}, _Assocs, {dpcs, Dpcs}]}) ->
        %% user_fun is called by m3ua_core to send primitives to the user layer
        Opts = [{user_pid, self()},
@@ -139,7 +147,17 @@ rx_m3ua_prim(#primitive{subsystem = 'M', gen_name = 'ASP_ACTIVE', spec_name = co
 rx_m3ua_prim(#primitive{subsystem = 'M', gen_name = 'RMT_ASP_ACTIVE', spec_name = confirm}, L) ->
     io:format("Example: remote peer now active and ready~n"),
     %gen_fsm:send_event(L#loop_dat.m3ua_pid, hack_force_activate),
-    tx_sccp_udt(L#loop_dat.scrc_pid);
+
+    CallingP = #sccp_addr{
+        ssn = ?LOCAL_SSN,
+        point_code = ?LOCAL_PC
+    },
+    CalledP = #sccp_addr{
+        ssn = ?T_ST_SSN,
+        point_code = ?T_ST_PC
+    },
+    Data = <<"message">>,
+    tx_sccp_udt(L#loop_dat.scrc_pid, CallingP, CalledP, Data, 1);
 
 rx_m3ua_prim(P, _L) ->
     io:format("Example: Ignoring M3UA prim ~p~n", [P]),
@@ -152,13 +170,11 @@ rx_m3ua_prim(P, _L) ->
 %% Create Unitdata message and pass it to the routing facility
 %% There should be GTT involved if needed; And this is TODO
 %%
-tx_sccp_udt(ScrcPid) ->
-    %% TODO Turn these into API parameters
-    CallingP = #sccp_addr{ssn = ?SCCP_SSN_MSC, point_code = osmo_util:pointcode2int(itu, {1,2,2})},
-    CalledP = #sccp_addr{ssn = ?SCCP_SSN_HLR, point_code = osmo_util:pointcode2int(itu, {1,1,1})},
-    Data = <<100,6,73,4,53,33,191,30>>,
-    Opts = [{protocol_class, {0, 0}}, {called_party_addr, CalledP},
-            {calling_party_addr, CallingP}, {user_data, Data}],
-    io:format("Example: Sending N-UNITDATA.req to SCRC~n"),
-    gen_fsm:send_event(ScrcPid, osmo_util:make_prim('N','UNITDATA',request,Opts)).
+tx_sccp_udt(ScrcPid, CallingP = #sccp_addr{},
+            CalledP = #sccp_addr{}, Data, ProtoClass)
+            when is_binary(Data), is_integer(ProtoClass) ->
+                Opts = [{protocol_class, {ProtoClass, 0}}, {called_party_addr, CalledP},
+                        {calling_party_addr, CallingP}, {user_data, Data}],
+                io:format("Example: Sending N-UNITDATA.req to SCRC~n"),
+                gen_fsm:send_event(ScrcPid, osmo_util:make_prim('N','UNITDATA',request,Opts)).
 

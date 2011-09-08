@@ -70,7 +70,7 @@ idle(#primitive{subsystem = 'N', gen_name = 'UNITDATA',
 	EncMsg = sccp_codec:encode_sccp_msgt(?SCCP_MSGT_UDT, Params),
 	% generate a MTP-TRANSFER.req primitive to the lower layer
 	send_mtp_transfer_down(LoopDat, EncMsg, OPC, DPC),
-	{next_state, idle, LoopDat};
+	{next_state, idle, LoopDat}.
 
 %idle(#primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
 		%spec_name = indication, parameters = Params}, LoopDat) ->
