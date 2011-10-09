@@ -33,7 +33,7 @@
 		user_pid,	% pid() of the user process
 		mtp_tx_action	% action to be performed for MTP-TRANSFER.req
 	}).
-% TODO: 
+% TODO: Integrate with proper SCCP routing / GTT implementation
 
 tx_prim_to_local_ref(Prim, LocalRef) ->
 	% determine the Pid to which the primitive must be sent
@@ -47,10 +47,12 @@ tx_prim_to_local_ref(Prim, LocalRef) ->
 	end.
 
 
+% user needs to provide [{mtp_tx_action, Foo}] style message
 start_link(InitData) ->
 	% make sure to store the Pid of the caller in the scrc_state
 	gen_fsm:start_link(sccp_scrc, [{user_pid,self()}|InitData], [{debug, [trace]}]).
 
+% gen_fsm init callback, called by start_link()
 init(InitPropList) ->
 	io:format("SCRC Init PropList~p ~n", [InitPropList]),
 	UserPid = proplists:get_value(user_pid, InitPropList),
@@ -103,6 +105,7 @@ idle(P= #primitive{subsystem = 'N', gen_name = 'UNITDATA',
 	send_mtp_transfer_down(LoopDat, EncMsg),
 	{next_state, idle, LoopDat};
 
+% MTP-TRANSFER.ind from lower layer is passed into SCRC
 idle(#primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
 		spec_name = indication, parameters = Params}, LoopDat) ->
 	{ok, Msg} = sccp_codec:parse_sccp_msg(Params#mtp3_msg.payload),
@@ -110,6 +113,7 @@ idle(#primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
 	case Msg of
 		% special handling for CR message here in SCRC
 		#sccp_msg{msg_type = ?SCCP_MSGT_CR} ->
+			% spawn a new SCOC instance/process
 			{LoopDat1, ScocPid} = spawn_new_scoc(LoopDat),
 			% send a RCOC-CONNECTING.ind primitive to the new SCOC fsm
 			UserPrim = sccp_scoc:make_prim('RCOC','CONNECTION', indication, Msg#sccp_msg.parameters),
