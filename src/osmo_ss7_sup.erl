@@ -38,7 +38,7 @@ add_mtp_link(L=#sigtran_link{type = m3ua, name = Name,
 			   local = Local, remote = Remote}) ->
 	ChildName = list_to_atom("ss7_link_m3ua_" ++ Name),
 	ChildSpec = {ChildName, {ss7_link_m3ua, start_link, [L]},
-		     permanent, infinity, worker, [ss7_link_m3ua]},
+		     permanent, 2000, worker, [ss7_link_m3ua]},
 	supervisor:start_child(?MODULE, ChildSpec);
 add_mtp_link([]) ->
 	ok;
