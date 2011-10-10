@@ -30,8 +30,7 @@
 -record(scrc_state, {
 		scoc_conn_ets,
 		next_local_ref,
-		user_pid,	% pid() of the user process
-		mtp_tx_action	% action to be performed for MTP-TRANSFER.req
+		user_pid	% pid() of the user process
 	}).
 % TODO: Integrate with proper SCCP routing / GTT implementation
 
@@ -47,17 +46,16 @@ tx_prim_to_local_ref(Prim, LocalRef) ->
 	end.
 
 
-% user needs to provide [{mtp_tx_action, Foo}] style message
 start_link(InitData) ->
 	% make sure to store the Pid of the caller in the scrc_state
-	gen_fsm:start_link(sccp_scrc, [{user_pid,self()}|InitData], [{debug, [trace]}]).
+	gen_fsm:start_link({local, sccp_scrc}, sccp_scrc, 
+			   [{user_pid,self()}|InitData], [{debug, [trace]}]).
 
 % gen_fsm init callback, called by start_link()
 init(InitPropList) ->
 	io:format("SCRC Init PropList~p ~n", [InitPropList]),
 	UserPid = proplists:get_value(user_pid, InitPropList),
-	MtpTxAct = proplists:get_value(mtp_tx_action, InitPropList),
-	LoopData = #scrc_state{user_pid = UserPid, mtp_tx_action = MtpTxAct, next_local_ref = 0},
+	LoopData = #scrc_state{user_pid = UserPid, next_local_ref = 0},
 	TableRef = ets:new(scoc_by_ref, [set]),
 	put(scoc_by_ref, TableRef),
 	{ok, idle, LoopData}.
@@ -84,6 +82,54 @@ spawn_new_scoc(LoopDat) ->
 	ets:insert_new(ConnTable, {LocalRef, ScocPid}),
 	{LoopDat1, ScocPid}.
 
+is_cr_or_connless(SccpMsg) when is_record(SccpMsg, sccp_msg) ->
+	case SccpMsg of
+		#sccp_msg{msg_type = ?SCCP_MSGT_CR} ->
+			true;
+		_ ->
+			sccp_codec:is_connectionless(SccpMsg)
+	end.
+
+% deliver message to local SCOC or SCLC
+deliver_to_scoc_sclc(LoopDat, Msg) when is_record(Msg, sccp_msg) ->
+	case Msg of
+		% special handling for CR message here in SCRC
+		#sccp_msg{msg_type = ?SCCP_MSGT_CR} ->
+			% spawn a new SCOC instance/process
+			{LoopDat1, ScocPid} = spawn_new_scoc(LoopDat),
+			% send a RCOC-CONNECTING.ind primitive to the new SCOC fsm
+			UserPrim = osmo_util:make_prim('RCOC','CONNECTION', indication, Msg#sccp_msg.parameters),
+			io:format("Sending ~p to ~p~n", [UserPrim, ScocPid]),
+			gen_fsm:send_event(ScocPid, UserPrim),
+			LoopDat1;
+		% T(ias) expired on the other end of the connection
+		%#sccp_msg{msg_type = ?SCCP_MSGT_IT} ->
+		_ ->
+			IsConnLess = sccp_codec:is_connectionless(Msg),
+			case IsConnLess of
+				true ->
+					% it would be more proper to send them via SCLC ??
+					%gen_fsm:send(sccp_sclc, ??
+					UserPid = LoopDat#scrc_state.user_pid,
+					% FIXME: N-NOTICE.ind for NOTICE 
+					UserPrim = osmo_util:make_prim('N','UNITDATA', indication, Msg),
+					UserPid ! {sccp, UserPrim};
+				false ->
+					% connection oriented messages need to go via SCOC instance
+					#sccp_msg{parameters = Opts} = Msg,
+					LocalRef = proplists:get_value(dst_local_ref, Opts),
+					ScocPrim = osmo_util:make_prim('RCOC', 'CONNECTION-MSG', indication, Msg),
+					case LocalRef of
+						undefined ->
+							% FIXME: send SCCP_MSGT_ERR
+							io:format("Conn-Msg to undefined ref ~p~n", [Msg]);
+						_ ->
+							tx_prim_to_local_ref(ScocPrim, LocalRef)
+					end
+			end,
+			LoopDat
+	end.
+
 
 % N-CONNECT.req from user: spawn new SCOC and deliver primitive to it
 idle(P = #primitive{subsystem = 'N', gen_name = 'CONNECT',
@@ -104,51 +150,27 @@ idle(P= #primitive{subsystem = 'N', gen_name = 'UNITDATA',
 	% generate a MTP-TRANSFER.req primitive to the lower layer
 	send_mtp_transfer_down(LoopDat, EncMsg),
 	{next_state, idle, LoopDat};
-
 % MTP-TRANSFER.ind from lower layer is passed into SCRC
 idle(#primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
 		spec_name = indication, parameters = Params}, LoopDat) ->
-	{ok, Msg} = sccp_codec:parse_sccp_msg(Params#mtp3_msg.payload),
-	io:format("Parsed Msg: ~p LoopDat ~p ~n", [Msg, LoopDat]),
-	case Msg of
-		% special handling for CR message here in SCRC
-		#sccp_msg{msg_type = ?SCCP_MSGT_CR} ->
-			% spawn a new SCOC instance/process
-			{LoopDat1, ScocPid} = spawn_new_scoc(LoopDat),
-			% send a RCOC-CONNECTING.ind primitive to the new SCOC fsm
-			UserPrim = sccp_scoc:make_prim('RCOC','CONNECTION', indication, Msg#sccp_msg.parameters),
-			io:format("Sending ~p to ~p~n", [UserPrim, ScocPid]),
-			gen_fsm:send_event(ScocPid, UserPrim);
-		% T(ias) expired on the other end of the connection
-		%#sccp_msg{msg_type = ?SCCP_MSGT_IT} ->
-		_ ->
-			IsConnLess = sccp_codec:is_connectionless(Msg),
-			case IsConnLess of
-				true ->
-					% it would be more proper to send them via SCLC ??
-					%gen_fsm:send(sccp_sclc, ??
-					UserPid = LoopDat#scrc_state.user_pid,
-					% FIXME: N-NOTICE.ind for NOTICE 
-					UserPrim = sccp_scoc:make_prim('N','UNITDATA', indication, Msg),
-					UserPid ! {sccp, UserPrim};
-				false ->
-					% connection oriented messages need to go via SCOC instance
-					#sccp_msg{parameters = Opts} = Msg,
-					LocalRef = proplists:get_value(dst_local_ref, Opts),
-					ScocPrim = sccp_scoc:make_prim('RCOC', 'CONNECTION-MSG', indication, Msg),
-					case LocalRef of
-						undefined ->
-							% FIXME: send SCCP_MSGT_ERR
-							io:format("Conn-Msg to undefined ref ~p~n", [Msg]);
-						_ ->
-							tx_prim_to_local_ref(ScocPrim, LocalRef)
-					end
-			end,
-			LoopDat1 = LoopDat
+	case sccp_routing:route_mtp3_sccp_in(Params) of
+		{remote} ->
+			% routing has taken care of it 
+			LoopDat1 = LoopDat;
+		{local, SccpMsg, _} ->
+			LoopDat1 = deliver_to_scoc_sclc(LoopDat, SccpMsg)
 	end,
 	{next_state, idle, LoopDat1};
-idle(sclc_scrc_connless_msg, LoopDat) ->
-	% FIXME: get to MTP-TRANSFER.req
+idle({sclc_scrc_connless_msg, SccpMsg}, LoopDat) ->
+	case sccp_routing:route_local_out(SccpMsg) of
+		{remote, SccpMsg2} ->
+			% FIXME: get to MTP-TRANSFER.req
+			LoopDat1 = LoopDat;
+		{error, _} ->
+			LoopDat1 = LoopDat;
+		{local, SccpMsg2} ->
+			LoopDat1 = deliver_to_scoc_sclc(LoopDat, SccpMsg2)
+	end,
 	{next_state, idle, LoopDat};
 % connection oriented messages like N-DATA.req from user
 idle(#primitive{subsystem = 'OCRC', gen_name = 'CONNECTION-MSG',
@@ -177,15 +199,6 @@ idle(#primitive{subsystem = 'OCRC', gen_name = 'CONNECTION',
 	send_mtp_transfer_down(LoopDat, EncMsg),
 	{next_state, idle, LoopDat}.
 
-send_mtp_down(#scrc_state{mtp_tx_action = MtpTxAction}, Prim) ->
-	io:format("MTP Tx ~p, Prim ~p~n", [MtpTxAction, Prim]),
-	case MtpTxAction of
-		{callback_fn, Function, Args} ->
-			Function(Prim, Args);
-		_ ->
-			{error, "Unknown MtpTxAction"}
-	end.
-
 send_mtp_transfer_down(LoopDat, EncMsg) ->
 	Rlbl = #mtp3_routing_label{sig_link_sel = 0, origin_pc = 123, dest_pc = 456},
 	Mtp3 = #mtp3_msg{network_ind = ?MTP3_NETIND_INTERNATIONAL,
@@ -193,4 +206,4 @@ send_mtp_transfer_down(LoopDat, EncMsg) ->
 			 routing_label = Rlbl, payload = EncMsg},
 	MtpPrim = #primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
 			     spec_name = request, parameters = Mtp3},
-	send_mtp_down(LoopDat, MtpPrim).
+	sccp_links:mtp3_tx(Mtp3).
