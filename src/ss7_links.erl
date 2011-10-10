@@ -35,7 +35,7 @@
 -export([bind_service/2, unbind_service/1]).
 
 -export([get_pid_for_link/2, get_pid_for_dpc_sls/2, mtp3_tx/1,
-	 get_linkset_for_dpc/1, dump_all_links/0]).
+	 get_linkset_for_dpc/1, dump/0]).
 
 -record(slink, {
 	key,		% {linkset_name, sls}
@@ -172,9 +172,11 @@ mtp3_tx(Mtp3 = #mtp3_msg{routing_label = RoutLbl}) ->
 						    request, Mtp3))
 	end.
 
-dump_all_links() ->
+dump() ->
 	List = ets:tab2list(ss7_linksets),
-	dump_linksets(List).
+	dump_linksets(List),
+	SList = ets:tab2list(ss7_services),
+	dump_services(SList).
 
 dump_linksets([]) ->
 	ok;
@@ -184,9 +186,9 @@ dump_linksets([Head|Tail]) when is_record(Head, slinkset) ->
 
 dump_single_linkset(Sls) when is_record(Sls, slinkset) ->
 	#slinkset{name = Name, local_pc = Lpc, remote_pc = Rpc,
-		  state = State} = Sls,
-	io:format("Linkset ~p, Local PC: ~p, Remote PC: ~p, State: ~p~n",
-		  [Name, Lpc, Rpc, State]),
+		  user_pid = Pid, state = State} = Sls,
+	io:format("Linkset ~p, Local PC: ~p, Remote PC: ~p, Pid: ~p, State: ~p~n",
+		  [Name, Lpc, Rpc, Pid, State]),
 	dump_linkset_links(Name).
 
 dump_linkset_links(Name) ->
@@ -197,11 +199,17 @@ dump_linkset_links(Name) ->
 dump_links([]) ->
 	ok;
 dump_links([Head|Tail]) when is_record(Head, slink) ->
-	#slink{name = Name, sls = Sls, state = State} = Head,
-	io:format("  Link ~p, SLS: ~p, State: ~p~n",
-		  [Name, Sls, State]),
+	#slink{name = Name, sls = Sls, state = State, user_pid = Pid} = Head,
+	io:format("  Link ~p, SLS: ~p, Pid: ~p, State: ~p~n",
+		  [Name, Sls, Pid, State]),
 	dump_links(Tail).
 
+dump_services([]) ->
+	ok;
+dump_services([Head|Tail]) when is_record(Head, service) ->
+	#service{name = Name, user_pid = Pid, service_nr = Nr} = Head,
+	io:format("Service ~p bound to ~p (Pid ~p)~n", [Nr, Name, Pid]),
+	dump_services(Tail).
 
 % server side code
 
