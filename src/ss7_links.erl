@@ -175,7 +175,7 @@ mtp3_tx(Mtp3 = #mtp3_msg{routing_label = RoutLbl}) ->
 dump() ->
 	List = ets:tab2list(ss7_linksets),
 	dump_linksets(List),
-	SList = ets:tab2list(ss7_services),
+	SList = ets:tab2list(mtp3_services),
 	dump_services(SList).
 
 dump_linksets([]) ->
