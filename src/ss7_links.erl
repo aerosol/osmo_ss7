@@ -303,7 +303,10 @@ handle_info({'EXIT', Pid, Reason}, S) ->
 		  [Pid, Reason]),
 	#su_state{linkset_tbl = LinksetTbl, link_tbl = LinkTbl,
 		  service_tbl = ServiceTbl} = S,
-	ets:match_delete(LinksetTbl, #slinkset{user_pid = Pid, _='_'}),
+	% we decided to keep Linksets as something like global
+	% configuration around and not kill them in case the user who
+	% created them has died.
+	%ets:match_delete(LinksetTbl, #slinkset{user_pid = Pid, _='_'}),
 	ets:match_delete(LinkTbl, #slink{user_pid = Pid, _='_'}),
 	ets:match_delete(ServiceTbl, #service{user_pid = Pid, _='_'}),
 	{noreply, S};
