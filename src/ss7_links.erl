@@ -83,6 +83,7 @@ init(_Arg) ->
 	% within client/caller process
 	LinkTbl = ets:new(ss7_link_table, [ordered_set, named_table,
 					    {keypos, #slink.key}]),
+	process_flag(trap_exit, true),
 	{ok, #su_state{linkset_tbl = LinksetTbl, link_tbl = LinkTbl,
 			service_tbl = ServiceTbl}}.
 
