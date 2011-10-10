@@ -272,6 +272,10 @@ handle_call({bind_service, {SNum, SName}}, {FromPid, _},
 	    false ->
 		{reply, {error, ets_insert}, S};
 	    _ ->
+		% We need to trap the user Pid for EXIT
+		% in order to automatically remove any links if
+		% the user process dies
+		link(FromPid),
 		{reply, ok, S}
 	end;
 handle_call({unbind_service, {SNum}}, {FromPid, _},
@@ -288,9 +292,11 @@ handle_cast(Info, S) ->
 handle_info({'EXIT', Pid, Reason}, S) ->
 	io:format("EXIT from Process ~p (~p), cleaning up tables~n",
 		  [Pid, Reason]),
-	#su_state{linkset_tbl = LinksetTbl, link_tbl = LinkTbl} = S,
-	ets:match_delete(LinksetTbl, #slinkset{user_pid = Pid}),
-	ets:match_delete(LinkTbl, #slink{user_pid = Pid}),
+	#su_state{linkset_tbl = LinksetTbl, link_tbl = LinkTbl,
+		  service_tbl = ServiceTbl} = S,
+	ets:match_delete(LinksetTbl, #slinkset{user_pid = Pid, _='_'}),
+	ets:match_delete(LinkTbl, #slink{user_pid = Pid, _='_'}),
+	ets:match_delete(ServiceTbl, #service{user_pid = Pid, _='_'}),
 	{noreply, S};
 handle_info(Info, S) ->
 	error_logger:error_report(["unknown handle_info",
