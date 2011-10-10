@@ -11,6 +11,7 @@
 			sccp_codec,
 			osmo_ss7_sup, osmo_ss7_app,
 			ss7_links, ss7_link_m3ua, ss7_link_ipa_client,
+			ss7_service_dump,
 			osmo_ss7_gtt,
 			osmo_ss7_pcap
 		]},
