@@ -31,7 +31,9 @@ start_link() ->
 init(Args) ->
 	LinksChild = {ss7_links, {ss7_links, start_link, []},
 		     permanent, 2000, worker, [ss7_links]},
-	{ok,{{one_for_one,60,600}, [LinksChild]}}.
+	RouteChild = {ss7_routes, {ss7_routes, start_link, []},
+		     permanent, 2000, worker, [ss7_routes]},
+	{ok,{{one_for_one,60,600}, [LinksChild, RouteChild]}}.
 
 % Add a m3ua link to this supervisor
 add_mtp_link(L=#sigtran_link{type = m3ua, name = Name,

@@ -39,20 +39,20 @@
 
 -record(slink, {
 	key,		% {linkset_name, sls}
-	name,
-	linkset_name,
+	name,		% name of the link
+	linkset_name,	% name of the linkset to which we belong
 	sls,
-	user_pid,
-	state
+	user_pid,	% Pid handling MTP-TRANSFER primitives
+	state		% (down | up | active)
 }).
 
 -record(slinkset, {
-	name,
-	local_pc,
-	remote_pc,
+	name,		% name of the linkset
+	local_pc,	% local point code
+	remote_pc,	% remote point code
 	user_pid,
-	state,
-	links
+	state,		% (down | up_inactive | active)
+	active_sls	% list of Sls of currently active links
 }).
 
 -record(service, {
@@ -218,7 +218,8 @@ handle_call({register_linkset, {LocalPc, RemotePc, Name}},
 				{FromPid, _FromRef}, S) ->
 	#su_state{linkset_tbl = Tbl} = S,
 	Ls = #slinkset{local_pc = LocalPc, remote_pc = RemotePc,
-		       name = Name, user_pid = FromPid},
+		       name = Name, user_pid = FromPid,
+		       state = down, active_sls=[]},
 	case ets:insert_new(Tbl, Ls) of
 	    false ->
 		{reply, {error, ets_insert}, S};
@@ -270,6 +271,7 @@ handle_call({set_link_state, {LsName, Sls, State}}, {FromPid, _}, S) ->
 	    [Link] ->
 		NewLink = Link#slink{state = State},
 		ets:insert(LinkTbl, NewLink),
+		propagate_linkstate_to_linkset(LsName, Sls, State),
 		{reply, ok, S}
 	end;
 
@@ -322,3 +324,32 @@ terminate(Reason, _S) ->
 
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
+
+% update the active_sls state in a linkset after a link state chg
+propagate_linkstate_to_linkset(LsName, Sls, State) ->
+	case ets:lookup(ss7_linksets, LsName) of
+	     [Ls = #slinkset{}] ->
+	       #slinkset{active_sls = ActSls, remote_pc = Dpc} = Ls,
+		case State of
+		    active ->
+			% add Sls to list (unique)
+			ActSls2 = lists:usort([Sls|ActSls]);
+		    _ ->
+			% del Sls from list
+			ActSls2 = lists:delete(Sls, ActSls)
+		end,
+		% compute the linkstate state
+		case ActSls2 of
+		    [] ->
+			LsState = up_inactive,
+			ss7_routes:delete_route(Dpc, 16#ffff, LsName);
+		    _ ->
+			LsState = active,
+			ss7_routes:create_route(Dpc, 16#ffff, LsName)
+		end,
+		ets:insert(ss7_linksets,
+			   Ls#slinkset{active_sls = ActSls2,
+					state = LsState});
+	    _ ->
+		{error, ets_lookup}
+	end.
