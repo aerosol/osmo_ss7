@@ -17,6 +17,17 @@
 % You should have received a copy of the GNU Affero General Public License
 % along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
+% this module is keeping the point code routing table for the MTP3 layer
+% of the Omsocom SS7 protocol stack.  Routes are created and deleted
+% with create_route() and delete_route(), the arguments are
+% 	* destination point code
+% 	* point code mask
+% 	* name of the linkset
+%
+% there is one function to actually make a routing decision: route_dpc/1
+% with a single argument: the destination point code.
+
 -module(ss7_routes).
 -behaviour(gen_server).
 
@@ -91,8 +102,10 @@ dump_routes([Head|Tail]) when is_record(Head, ss7route) ->
 
 dump_single_route(#ss7route{remote_pc_mask = {Pc, Mask},
 			    linkset_name = Name}) ->
+	PcTuple = osmo_util:pointcode_fmt(itu, Pc),
+	MaskTuple = osmo_util:pointcode_fmt(itu, Mask),
 	io:format("Dest PC ~p/~p -> Linkset ~p~n",
-		  [Pc, Mask, Name]).
+		  [PcTuple, MaskTuple, Name]).
 
 % server side code
 
