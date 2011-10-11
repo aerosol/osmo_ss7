@@ -92,8 +92,8 @@ handle_cast(#primitive{subsystem = 'M', gen_name = 'ASP_DOWN'}, L) ->
 	set_link_state(L#loop_dat.link, down),
 	{noreply, L};
 handle_cast(#primitive{subsystem = 'M', gen_name = 'ASP_INACTIVE'}, L) ->
-	io:format("~p: ASP_DOWN.ind~n", [?MODULE]),
-	set_link_state(L#loop_dat.link, inactive),
+	io:format("~p: ASP_INACTIVE.ind~n", [?MODULE]),
+	set_link_state(L#loop_dat.link, up),
 	{noreply, L};
 handle_cast(P, L) ->
 	io:format("~p: Ignoring M3UA prim ~p~n", [?MODULE, P]),
