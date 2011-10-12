@@ -35,7 +35,7 @@
 -export([bind_service/2, unbind_service/1]).
 
 -export([get_pid_for_link/2, get_pid_for_dpc_sls/2, mtp3_tx/1,
-	 get_linkset_for_dpc/1, dump/0]).
+	 get_linkset_for_dpc/1, get_opc_for_linkset/1, is_pc_local/1, dump/0]).
 
 -record(slink, {
 	key,		% {linkset_name, sls}
@@ -118,7 +118,7 @@ unbind_service(ServiceNum) ->
 % the lookup functions can directly use the ets named_table from within
 % the client process, no need to go through a synchronous IPC
 
-get_pid_for_link(LinksetName, Sls) ->
+get_pid_for_link(LinksetName, Sls) when is_list(LinksetName), is_integer(Sls) ->
 	case ets:lookup(ss7_link_table, {LinksetName, Sls}) of
 	    [#slink{user_pid = Pid}] ->	
 		% FIXME: check the link state 
@@ -128,7 +128,7 @@ get_pid_for_link(LinksetName, Sls) ->
 	end.
 
 % Resolve linkset name directly connected to given point code
-get_linkset_for_dpc(Dpc) ->
+get_linkset_for_dpc(Dpc) when is_integer (Dpc) ->
 	Ret = ets:match_object(ss7_linksets,
 			       #slinkset{remote_pc = Dpc, _ = '_'}),
 	case Ret of
@@ -139,12 +139,32 @@ get_linkset_for_dpc(Dpc) ->
 	end.
 
 % resolve link-handler Pid for given (directly connected) point code/sls
-get_pid_for_dpc_sls(Dpc, Sls) ->
+get_pid_for_dpc_sls(Dpc, Sls) when is_integer(Dpc) and is_integer(Sls) ->
 	case get_linkset_for_dpc(Dpc) of
 	    {error, Err} ->
 		{error, Err};
 	    {ok, LinksetName} ->
 		get_pid_for_link(LinksetName, Sls)
+	end.
+
+% the the local point code for a given linkset
+get_opc_for_linkset(LsName) when is_list(LsName) ->
+	case ets:lookup(ss7_linksets, LsName) of
+	    [#slinkset{local_pc = Opc}|_Tail] ->
+		Opc;
+	    _ ->
+		undefined
+	end.
+
+% determine if a given point code is local
+is_pc_local(Pc) when is_integer(Pc) ->
+	Ret = ets:match_object(ss7_linksets,
+			       #slinkset{local_pc = Pc, _ = '_'}),
+	case Ret of
+	    [#slinkset{}] ->
+		true;
+	    _ ->
+		false
 	end.
 
 % process a received message on an underlying link
