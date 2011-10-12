@@ -32,7 +32,7 @@
 parse_point_code(BinPC, PCind) when is_binary(BinPC) ->
 	case PCind of
 		1 ->
-			<<PointCode:16/big, Remain/binary>> = BinPC;
+			<<PointCode:16/little, Remain/binary>> = BinPC;
 		_ ->
 			Remain = BinPC,
 			PointCode = undef
@@ -272,7 +272,7 @@ encode_pc(PointCode) ->
 		undef ->
 			{0, <<>>};
 		_ ->
-			{1, <<PointCode:16/big>>}
+			{1, <<PointCode:16/little>>}
 	end.
 
 encode_ssn(SSN) ->
