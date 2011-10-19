@@ -65,9 +65,13 @@ scrc_tx_to_mtp(Prim, Args) ->
 
 % Callback that we pass to the m3ua_core, which it will call when it wants to
 % send a primitive up the stack to SCCP
-m3ua_tx_to_user(Prim, Args) ->
+m3ua_tx_to_user(P=#primitive{subsystem = 'MTP'}, Args) ->
+	% send it directly to the 'service' that has bound
+	ss7_links:mtp3_rx(P);
+m3ua_tx_to_user(P=#primitive{subsystem = 'M'}, Args) ->
+	% send management primitives into the m3ua_link process
 	UserPid = Args,
-	gen_server:cast(UserPid, Prim).
+	gen_server:cast(UserPid, P).
 
 handle_cast(P = #primitive{subsystem = 'MTP', gen_name = 'TRANSFER', spec_name = request}, L) ->
 	scrc_tx_to_mtp(P, L#loop_dat.m3ua_pid),

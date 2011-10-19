@@ -21,6 +21,7 @@
 -behaviour(gen_server).
 
 -include_lib("osmo_ss7/include/mtp3.hrl").
+-include_lib("osmo_ss7/include/osmo_util.hrl").
 
 % gen_fsm callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -35,7 +36,8 @@
 -export([bind_service/2, unbind_service/1]).
 
 -export([get_pid_for_link/2, get_pid_for_dpc_sls/2, mtp3_tx/1,
-	 get_linkset_for_dpc/1, get_opc_for_linkset/1, is_pc_local/1, dump/0]).
+	 get_linkset_for_dpc/1, get_opc_for_linkset/1, is_pc_local/1,
+	 get_user_pid_for_service/1, mtp3_rx/1, dump/0]).
 
 -record(slink, {
 	key,		% {linkset_name, sls}
@@ -118,6 +120,14 @@ unbind_service(ServiceNum) ->
 % the lookup functions can directly use the ets named_table from within
 % the client process, no need to go through a synchronous IPC
 
+get_user_pid_for_service(Service) when is_integer(Service) ->
+	case ets:lookup(mtp3_services, Service) of
+	    [#service{user_pid=Pid}] ->
+		{ok, Pid};
+	    [] ->
+		{error, no_such_service}
+	end.
+
 get_pid_for_link(LinksetName, Sls) when is_list(LinksetName), is_integer(Sls) ->
 	case ets:lookup(ss7_link_table, {LinksetName, Sls}) of
 	    [#slink{user_pid = Pid}] ->	
@@ -168,12 +178,13 @@ is_pc_local(Pc) when is_integer(Pc) ->
 	end.
 
 % process a received message on an underlying link
-mtp3_rx(Mtp3 = #mtp3_msg{service_ind = Serv}) ->
+mtp3_rx(Mtp3 = #mtp3_msg{}) ->
+	mtp3_rx(osmo_util:make_prim('MTP', 'TRANSFER',
+		indication, Mtp3));
+mtp3_rx(P = #primitive{parameters=#mtp3_msg{service_ind=Serv}}) ->
 	case ets:lookup(mtp3_services, Serv) of
 	     [#service{user_pid = Pid}] ->
-		gen_server:cast(Pid,
-				osmo_util:make_prim('MTP', 'TRANSFER',
-						    indication, Mtp3));
+		gen_server:cast(Pid, P);
 	    _ ->
 		% FIXME: send back some error message on MTP level
 		ok

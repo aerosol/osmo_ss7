@@ -277,7 +277,7 @@ asp_active(#m3ua_msg{version = 1, msg_class = ?M3UA_MSGC_TRANSFER,
 		     msg_type = ?M3UA_MSGT_XFR_DATA, payload = Params}, LoopDat) ->
 	% Data transfer from remote entity: Send MTP-TRANSFER.ind primitive to the user
 	Mtp3 = proplists:get_value(?M3UA_IEI_PROTOCOL_DATA, Params),
-	send_prim_to_user(LoopDat, osmo_util:make_prim('MTP','TRANSFER',indication,[Mtp3])),
+	send_prim_to_user(LoopDat, osmo_util:make_prim('MTP','TRANSFER',indication,Mtp3)),
 	{next_state, asp_active, LoopDat};
 asp_active(#m3ua_msg{msg_class = ?M3UA_MSGC_ASPTM,
 		     msg_type = ?M3UA_MSGT_ASPTM_ASPIA_ACK}, LoopDat) ->

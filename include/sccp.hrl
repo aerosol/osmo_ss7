@@ -112,6 +112,15 @@
 -define(SCCP_CAUSE_REF_NO_GTT_FOR_NATURE,	2#00010010).
 -define(SCCP_CAUSE_REF_UNEQUIPPED_USER,		2#00010011).
 
+% SCCP sub-system numbers
+-define(SCCP_SSN_MAP_HLR,	6).
+-define(SCCP_SSN_MAP_VLR,	7).
+-define(SCCP_SSN_MAP_MSC,	8).
+-define(SCCP_SSN_MAP_EIR,	9).
+-define(SCCP_SSN_MAP_GMLC,	145).
+-define(SCCP_SSN_MAP_gsmSCF,	147).
+-define(SCCP_SSN_MAP_SGSN,	149).
+-define(SCCP_SSN_MAP_GGSN,	150).
 
 
 % a single parsed SCCP message
