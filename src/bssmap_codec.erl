@@ -193,5 +193,5 @@ bin_bcd2str(<<>>, List) ->
 	List;
 bin_bcd2str(BcdBin, List) ->
 	<<Nibble:4, Remain/bitstring>> = BcdBin,
-	Char = "0" + Nibble,
+	Char = $0 + Nibble,
 	bin_bcd2str(Remain, List ++ [Char]).
