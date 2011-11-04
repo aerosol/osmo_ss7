@@ -73,8 +73,8 @@
 -define(M2UA_P_COM_CORREL_ID,		19).
 
 -record(m2ua_msg, {
-	msg_class,
-	msg_type,
+	msg_class	:: 0..255,
+	msg_type	:: 0..255,
 	parameters
 	}).
 

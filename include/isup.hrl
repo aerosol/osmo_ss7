@@ -105,8 +105,10 @@
 	phone_number}
 	).
 
+-type isup_cic()	::	0..65535.
+
 -record(isup_msg, {
-	msg_type,
-	cic,
-	parameters
+	msg_type		:: non_neg_integer(),
+	cic			:: isup_cic(),
+	parameters		:: list()
 	}).

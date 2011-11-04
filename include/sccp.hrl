@@ -122,20 +122,22 @@
 -define(SCCP_SSN_MAP_SGSN,	149).
 -define(SCCP_SSN_MAP_GGSN,	150).
 
+-type sccp_msg_type()		:: 0..255.
+-type sccp_proto_class()	:: 0..3.
 
 % a single parsed SCCP message
 -record(sccp_msg, {
-	msg_type,
+	msg_type	:: sccp_msg_type(),
 	parameters
 	}).
 
 
 -record(global_title, {
-	  gti,
-	  nature_of_addr_ind,
+	  gti :: 0..15,
+	  nature_of_addr_ind :: 0..255,
 	  trans_type,
-	  encoding,
-	  numbering_plan,
+	  encoding	:: 0..15,
+	  numbering_plan:: 0..15,
 	  phone_number
 	}).
 

@@ -63,10 +63,10 @@
 -define(M3UA_IEI_DEREG_STATUS,		16#0213).
 
 -record(m3ua_msg, {
-	 version,
-	 msg_class,
-	 msg_type,
-	 msg_length,
+	 version	:: 0..255,
+	 msg_class	:: 0..255,
+	 msg_type	:: 0..255,
+	 msg_length	:: non_neg_integer(),
 	 payload
 	}).
 
