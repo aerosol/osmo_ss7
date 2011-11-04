@@ -326,7 +326,7 @@ rx_m3ua(Msg = #m3ua_msg{}, State, LoopDat) ->
 
 % Transform the M3UA SSNM messages into classic MTP primitives
 map_ssnm_to_mtp_prim(MsgType) ->
-	Mtp = #primitive{subsystem = 'MTP', spec_name = indiciation},
+	Mtp = #primitive{subsystem = 'MTP', spec_name = indication},
 	case MsgType of
 	    ?M3UA_MSGT_SSNM_DUNA -> Mtp#primitive{gen_name = 'PAUSE'};
 	    ?M3UA_MSGT_SSNM_DAVA -> Mtp#primitive{gen_name = 'RESUME'};
