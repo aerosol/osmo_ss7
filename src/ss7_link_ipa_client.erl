@@ -76,12 +76,12 @@ handle_cast(#primitive{subsystem = 'M', gen_name = 'SCTP_ESTABLISH', spec_name =
 	{noreply, L};
 handle_cast(#primitive{subsystem = 'M', gen_name = 'ASP_UP', spec_name = confirm}, L) ->
 	io:format("~p: ASP_UP.ind -> ASP_ACTIVE.req~n", [?MODULE]),
-	set_link_state(L, up),
+	set_link_state(L#loop_dat.link, up),
 	gen_fsm:send_event(L#loop_dat.ipa_pid, osmo_util:make_prim('M','ASP_ACTIVE',request)),
 	{noreply, L};
 handle_cast(#primitive{subsystem = 'M', gen_name = 'ASP_ACTIVE', spec_name = confirm}, L) ->
 	io:format("~p: ASP_ACTIVE.ind - M3UA now active and ready~n", [?MODULE]),
-	set_link_state(L, active),
+	set_link_state(L#loop_dat.link, active),
 	%tx_sccp_udt(L#loop_dat.scrc_pid),
 	{noreply, L};
 handle_cast(#primitive{subsystem = 'M', gen_name = 'ASP_DOWN'}, L) ->
