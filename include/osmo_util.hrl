@@ -6,5 +6,5 @@
 	  subsystem,
 	  gen_name,
 	  spec_name :: prim_spec_name(),
-	  parameters :: list()
+	  parameters
 	}).
