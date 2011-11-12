@@ -1,1 +1,5 @@
 *.beam
+.eunit
+ebin/*.boot
+ebin/*.script
+ebin/*.tar.gz
