@@ -37,7 +37,7 @@ parse_point_code(BinPC, PCind) when is_binary(BinPC) ->
 			<<PointCode:16/little, Remain/binary>> = BinPC;
 		_ ->
 			Remain = BinPC,
-			PointCode = undef
+			PointCode = undefined
 	end,
 	{Remain, PointCode}.
 
@@ -47,7 +47,7 @@ parse_ssn(BinSSN, SSNind) ->
 			<<SSN:8, Remain/binary>> = BinSSN;
 		_ ->
 			Remain = BinSSN,
-			SSN = undef
+			SSN = undefined
 	end,
 	{Remain, SSN}.
 
@@ -60,7 +60,7 @@ enc_is_odd(Enc) ->
 parse_gt(BinGT, GTind) ->
 	case GTind of
 		?SCCP_GTI_NO_GT ->
-			undef;
+			undefined;
 		?SCCP_GTI_NAT_ONLY ->
 			% Figure 7/Q.713
 			<<Odd:1, Nature:7, Digits/binary>> = BinGT,
@@ -271,7 +271,7 @@ encode_gt(#global_title{gti = GTind, phone_number = PhoneNum,
 
 encode_pc(PointCode) when is_integer(PointCode) ->
 	case PointCode of
-		undef ->
+		undefined ->
 			{0, <<>>};
 		_ ->
 			{1, <<PointCode:16/little>>}
@@ -282,7 +282,7 @@ encode_pc(PcRec) ->
 
 encode_ssn(SSN) ->
 	case SSN of
-		undef ->
+		undefined ->
 			{0, <<>>};
 		_ ->
 			{1, <<SSN:8>>}
