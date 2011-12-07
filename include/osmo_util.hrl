@@ -8,3 +8,10 @@
 	  spec_name :: prim_spec_name(),
 	  parameters
 	}).
+
+-type pointcode_repr() :: 'itu' | 'ansi' | 'ttc'.
+
+-record(pointcode, {
+	repr :: pointcode_repr(),
+	value
+}).
