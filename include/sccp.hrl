@@ -67,6 +67,11 @@
 -define(SCCP_SSN_BISDN,		2#000001101).
 -define(SCCP_SSN_TC_TEST,	2#000001110).
 
+% According to Q.731 Section 3.4.2.3.1
+-define(SCCP_NAI_SUBSCRIBER,	2#00000001).
+-define(SCCP_NAI_NATIONA_SIGN,	2#00000011).
+-define(SCCP_NAI_INTERNATIONAL,	2#00000100).
+
 % According to Q.713 Section 3.11 - Release Cause
 %FIXME
 
@@ -134,7 +139,7 @@
 
 -record(global_title, {
 	  gti :: 0..15,
-	  nature_of_addr_ind :: 0..255,
+	  nature_of_addr_ind :: 0..127,
 	  trans_type,
 	  encoding	:: 0..15,
 	  numbering_plan:: 0..15,
@@ -148,4 +153,3 @@
 	  ssn,			% optional
 	  global_title		% optional
 	}).
-
