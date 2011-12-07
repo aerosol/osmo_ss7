@@ -24,6 +24,8 @@
 -export([parse_sccp_msg/1, encode_sccp_msg/1, encode_sccp_msgt/2,
 	 is_connectionless/1]).
 
+-export([gen_gt_helper/1, gen_addr_helper/2, gen_addr_helper/3]).
+
 -compile(export_all).
 
 -compile({parse_transform, exprecs}).
@@ -448,3 +450,22 @@ is_connectionless(MsgType) ->
 		?SCCP_MSGT_LUDTS -> true;
 		_ -> false
 	end.
+
+
+gen_gt_helper(Number) when is_list(Number) ->
+	#global_title{gti=?SCCP_GTI_NAT_ONLY,
+		      nature_of_addr_ind=?SCCP_NAI_INTERNATIONAL,
+		      phone_number = Number}.
+
+gen_addr_helper(Gt, Pc, Ssn) when is_record(Gt, global_title) ->
+	#sccp_addr{point_code=Pc, ssn=Ssn, global_title=Gt};
+gen_addr_helper(Number, Pc, Ssn) when is_list(Number) ->
+	Gt = gen_gt_helper(Number),
+	gen_addr_helper(Gt, Pc, Ssn).
+
+
+gen_addr_helper(Gt, Pc) when is_record(Gt, global_title) ->
+	#sccp_addr{point_code=Pc, global_title=Gt};
+gen_addr_helper(Number, Pc) when is_list(Number) ->
+	Gt = gen_gt_helper(Number),
+	gen_addr_helper(Gt, Pc).
