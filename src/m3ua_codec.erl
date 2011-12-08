@@ -89,9 +89,11 @@ encode_m3ua_opts([{Iei, Attr}|Tail], Bin) ->
 encode_m3ua_opt(?M3UA_IEI_PROTOCOL_DATA, Mtp3) when is_record(Mtp3, mtp3_msg) ->
 	#mtp3_msg{network_ind = Ni, service_ind = Si,
 		  routing_label = #mtp3_routing_label{sig_link_sel = Sls,
-						      origin_pc = Opc,
-						      dest_pc = Dpc},
+						      origin_pc = OpcIn,
+						      dest_pc = DpcIn},
 		  payload = Payload, m3ua_mp = Mp} = Mtp3,
+	Opc = osmo_util:pointcode2int(OpcIn),
+	Dpc = osmo_util:pointcode2int(DpcIn),
 	case Mp of
 		undefined -> MpD = 0;
 		_ -> MpD = Mp

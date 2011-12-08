@@ -38,10 +38,12 @@ parse_mtp3_msg(DataBin) when is_binary(DataBin) ->
 		  payload = Payload}.
 
 
-encode_mtp3_routing_label(#mtp3_routing_label{sig_link_sel = Sls, origin_pc = Opc,
-					      dest_pc = Dpc}) ->
+encode_mtp3_routing_label(#mtp3_routing_label{sig_link_sel = Sls, origin_pc = OpcIn,
+					      dest_pc = DpcIn}) ->
+	Opc = osmo_util:pointcode2int(OpcIn),
+	Dpc = osmo_util:pointcode2int(DpcIn),
 	<<Sls:4/big, Opc:14/big, Dpc:14/big>>.
-					      
+
 encode_mtp3_msg(#mtp3_msg{network_ind = NetInd, service_ind = ServiceInd,
 			  routing_label = RoutLbl, payload = Payload}) ->
 	RoutLblBin = encode_mtp3_routing_label(RoutLbl),
