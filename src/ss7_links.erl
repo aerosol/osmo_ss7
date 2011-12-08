@@ -184,6 +184,13 @@ is_pc_local(Pc) when is_integer(Pc) ->
 mtp3_rx(Mtp3 = #mtp3_msg{}) ->
 	mtp3_rx(osmo_util:make_prim('MTP', 'TRANSFER',
 		indication, Mtp3));
+% FIXME: PAUSE/RESUME/STATUS handling
+mtp3_rx(#primitive{subsystem='MTP', spec_name='PAUSE', gen_name=indication}) ->
+	ok;
+mtp3_rx(#primitive{subsystem='MTP', spec_name='RESUME', gen_name=indication}) ->
+	ok;
+mtp3_rx(#primitive{subsystem='MTP', spec_name='STATUS', gen_name=indication}) ->
+	ok;
 mtp3_rx(P = #primitive{parameters=#mtp3_msg{service_ind=Serv}}) ->
 	case ets:lookup(mtp3_services, Serv) of
 	     [#service{user_pid = Pid}] ->
