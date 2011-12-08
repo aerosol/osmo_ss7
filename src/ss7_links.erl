@@ -35,7 +35,8 @@
 -export([register_link/3, unregister_link/2, set_link_state/3]).
 -export([bind_service/2, unbind_service/1]).
 
--export([get_pid_for_link/2, get_pid_for_dpc_sls/2, mtp3_tx/1,
+-export([get_pid_for_link/2, get_pid_for_dpc_sls/2,
+	 mtp3_tx/1, mtp3_tx/2,
 	 get_linkset_for_dpc/1, get_opc_for_linkset/1, is_pc_local/1,
 	 get_user_pid_for_service/1, mtp3_rx/1, dump/0]).
 
@@ -190,6 +191,20 @@ mtp3_rx(P = #primitive{parameters=#mtp3_msg{service_ind=Serv}}) ->
 	    _ ->
 		% FIXME: send back some error message on MTP level
 		ok
+	end.
+
+
+% transmit a MTP3 message via any of the avaliable links for the DPC
+mtp3_tx(Mtp3 = #mtp3_msg{routing_label = RoutLbl}, Link) ->
+	#mtp3_routing_label{sig_link_sel = Sls} = RoutLbl,
+	% discover the link through which we shall send
+	case get_pid_for_link(Link, Sls) of
+	    {error, Error} ->
+		{error, Error};
+	    {ok, Pid} ->
+		    gen_server:cast(Pid,
+				osmo_util:make_prim('MTP', 'TRANSFER',
+						    request, Mtp3))
 	end.
 
 
