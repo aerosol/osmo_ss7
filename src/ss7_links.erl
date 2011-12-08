@@ -138,7 +138,8 @@ get_pid_for_link(LinksetName, Sls) when is_list(LinksetName), is_integer(Sls) ->
 	end.
 
 % Resolve linkset name directly connected to given point code
-get_linkset_for_dpc(Dpc) when is_integer (Dpc) ->
+get_linkset_for_dpc(DpcIn) ->
+	Dpc = osmo_util:pointcode2int(DpcIn),
 	Ret = ets:match_object(ss7_linksets,
 			       #slinkset{remote_pc = Dpc, _ = '_'}),
 	case Ret of
@@ -149,7 +150,8 @@ get_linkset_for_dpc(Dpc) when is_integer (Dpc) ->
 	end.
 
 % resolve link-handler Pid for given (directly connected) point code/sls
-get_pid_for_dpc_sls(Dpc, Sls) when is_integer(Dpc) and is_integer(Sls) ->
+get_pid_for_dpc_sls(DpcIn, Sls) when is_integer(Sls) ->
+	Dpc = osmo_util:pointcode2int(DpcIn),
 	case get_linkset_for_dpc(Dpc) of
 	    {error, Err} ->
 		{error, Err};

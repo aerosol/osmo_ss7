@@ -69,10 +69,12 @@ init(_Arg) ->
 % all write operations go through gen_server:call(), as only the ?MODULE
 % process has permission to modify the table content
 
-create_route(RemotePc, RemoteMask, LinksetName) ->
+create_route(RemotePcIn, RemoteMask, LinksetName) ->
+	RemotePc = osmo_util:pointcode2int(RemotePcIn),
 	gen_server:call(?MODULE, {create_route, {RemotePc, RemoteMask, LinksetName}}).
 
-delete_route(RemotePc, RemoteMask, LinksetName) ->
+delete_route(RemotePcIn, RemoteMask, LinksetName) ->
+	RemotePc = osmo_util:pointcode2int(RemotePcIn),
 	gen_server:call(?MODULE, {delete_route, {RemotePc, RemoteMask, LinksetName}}).
 
 % the lookup functions can directly use the ets named_table from within
