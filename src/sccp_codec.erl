@@ -31,6 +31,11 @@
 -compile({parse_transform, exprecs}).
 -export_records([global_title, sccp_addr, sccp_msg]).
 
+binarify(In) when is_binary(In) ->
+	In;
+binarify(In) when is_list(In) ->
+	list_to_binary(In).
+
 parse_point_code(BinPC, PCind) when is_binary(BinPC) ->
 	case PCind of
 		1 ->
@@ -354,13 +359,13 @@ encode_sccp_msgt(?SCCP_MSGT_RLC, Params) ->
 encode_sccp_msgt(?SCCP_MSGT_DT1, Params) ->
 	DstLocalRef = proplists:get_value(dst_local_ref, Params),
 	SegmReass = proplists:get_value(segm_reass, Params),
-	UserData = proplists:get_value(user_data, Params),
+	UserData = binarify(proplists:get_value(user_data, Params)),
 	UserDataLen = byte_size(UserData),
 	<<?SCCP_MSGT_DT1:8, DstLocalRef:24/big, SegmReass:8, 1:8, UserDataLen:8, UserData/binary>>;
 encode_sccp_msgt(?SCCP_MSGT_DT2, Params) ->
 	DstLocalRef = proplists:get_value(dst_local_ref, Params),
 	SeqSegm = proplists:get_value(seq_segm, Params),
-	UserData = proplists:get_value(user_data, Params),
+	UserData = binarify(proplists:get_value(user_data, Params)),
 	UserDataLen = byte_size(UserData),
 	<<?SCCP_MSGT_DT2:8, DstLocalRef:24/big, SeqSegm:16, 1:8, UserDataLen:8, UserData/binary>>;
 encode_sccp_msgt(?SCCP_MSGT_AK, Params) ->
@@ -376,7 +381,7 @@ encode_sccp_msgt(?SCCP_MSGT_UDT, Params) ->
 	CallingParty = proplists:get_value(calling_party_addr, Params),
 	CallingPartyEnc = encode_sccp_addr(CallingParty),
 	CallingPartyLen = byte_size(CallingPartyEnc),
-	UserData = proplists:get_value(user_data, Params),
+	UserData = binarify(proplists:get_value(user_data, Params)),
 	UserDataLen = byte_size(UserData),
 	% variable part
 	CalledPartyPtr = 3,
@@ -394,7 +399,7 @@ encode_sccp_msgt(?SCCP_MSGT_UDTS, Params) ->
 	CallingParty = proplists:get_value(calling_party_addr, Params),
 	CallingPartyEnc = encode_sccp_addr(CallingParty),
 	CallingPartyLen = byte_size(CallingPartyEnc),
-	UserData = proplists:get_value(user_data, Params),
+	UserData = binarify(proplists:get_value(user_data, Params)),
 	UserDataLen = byte_size(UserData),
 	% variable part
 	CalledPartyPtr = 3,
@@ -406,7 +411,7 @@ encode_sccp_msgt(?SCCP_MSGT_UDTS, Params) ->
 	<<?SCCP_MSGT_UDTS:8, ReturnCause:8, CalledPartyPtr:8, CallingPartyPtr:8, DataPtr:8, Remain/binary>>;
 encode_sccp_msgt(?SCCP_MSGT_ED, Params) ->
 	DstLocalRef = proplists:get_value(dst_local_ref, Params),
-	UserData = proplists:get_value(user_data, Params),
+	UserData = binarify(proplists:get_value(user_data, Params)),
 	UserDataLen = byte_size(UserData),
 	DataPtr = 1,
 	<<?SCCP_MSGT_ED:8, DstLocalRef:24/big, DataPtr:8, UserDataLen:8, UserData/binary>>;
