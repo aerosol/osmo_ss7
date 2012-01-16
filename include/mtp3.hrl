@@ -21,4 +21,13 @@
 	payload
 	}).
 
+-record(mtp3mg_msg, {
+	h0,
+	h1,
+	payload
+	}).
 
+-define(MTP3MG_H0_TEST, 1).
+
+-define(MTP3MG_H1_SLTM,	1).
+-define(MTP3MG_H1_SLTA,	2).
