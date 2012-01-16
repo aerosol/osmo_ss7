@@ -34,8 +34,9 @@ parse_mtp3_routing_label(_, LabelBin) when is_binary(LabelBin) ->
 parse_mtp3_msg(DataBin) when is_binary(DataBin) ->
 	<<NetInd:2, 0:2, ServiceInd:4, Remain/binary>> = DataBin,
 	{ok, RoutLbl, Payload} = parse_mtp3_routing_label(ServiceInd, Remain),
+	PayloadDec = decode_payload(ServiceInd, Payload),
 	#mtp3_msg{network_ind = NetInd, service_ind = ServiceInd, routing_label = RoutLbl,
-		  payload = Payload}.
+		  payload = PayloadDec}.
 
 
 encode_mtp3_routing_label(#mtp3_routing_label{sig_link_sel = Sls, origin_pc = OpcIn,
@@ -47,5 +48,19 @@ encode_mtp3_routing_label(#mtp3_routing_label{sig_link_sel = Sls, origin_pc = Op
 encode_mtp3_msg(#mtp3_msg{network_ind = NetInd, service_ind = ServiceInd,
 			  routing_label = RoutLbl, payload = Payload}) ->
 	RoutLblBin = encode_mtp3_routing_label(RoutLbl),
-	<<NetInd:2, 0:2, ServiceInd:4, RoutLblBin/binary, Payload/binary>>.
+	PayloadBin = payload_to_binary(Payload),
+	<<NetInd:2, 0:2, ServiceInd:4, RoutLblBin/binary, PayloadBin/binary>>.
+
+
+decode_payload(?MTP3_SERV_MGMT, Payload) ->
+	<<H0:4, H1:4, _:4, Len:4, TP/binary>> = Payload,
+	#mtp3mg_msg{h0 = H0, h1 = H1, test_pattern = TP};
+decode_payload(_, Payload) ->
+	Payload.
+
+payload_to_binary(#mtp3mg_msg{h0=H0, h1=H1, test_pattern=TP}) ->
+	Len = byte_size(TP),
+	<<H0:4, H1:4, 0:4, Len:4, TP/binary>>;
+payload_to_binary(Whatever) ->
+	Whatever.
 
