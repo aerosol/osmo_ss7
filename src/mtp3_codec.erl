@@ -28,7 +28,10 @@
 
 % Parse standard routing label according to Section 2.2 of ITU-T Q.704
 parse_mtp3_routing_label(_, LabelBin) when is_binary(LabelBin) ->
-	<<Sls:4/big, Opc:14/big, Dpc:14/big, Remain/binary>> = LabelBin,
+	% we need to swap the four bytes and then parse the fields
+	<<Label32:32/little, Remain/binary>> = LabelBin,
+	LabelRev = <<Label32:32/big>>,
+	<<Sls:4/big, Dpc:14/big, Opc:14/big>> = LabelRev,
 	{ok, #mtp3_routing_label{sig_link_sel = Sls, origin_pc = Opc, dest_pc = Dpc}, Remain}.
 
 parse_mtp3_msg(DataBin) when is_binary(DataBin) ->
@@ -43,7 +46,9 @@ encode_mtp3_routing_label(#mtp3_routing_label{sig_link_sel = Sls, origin_pc = Op
 					      dest_pc = DpcIn}) ->
 	Opc = osmo_util:pointcode2int(OpcIn),
 	Dpc = osmo_util:pointcode2int(DpcIn),
-	<<Sls:4/big, Opc:14/big, Dpc:14/big>>.
+	% we need to swap the four bytes after encoding the fields
+	<<Label32:32/little>> = <<Sls:4/big, Dpc:14/big, Opc:14/big>>,
+	<<Label32:32/big>>.
 
 encode_mtp3_msg(#mtp3_msg{network_ind = NetInd, service_ind = ServiceInd,
 			  routing_label = RoutLbl, payload = Payload}) ->
