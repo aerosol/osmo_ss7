@@ -50,7 +50,7 @@ parse_msg(DataBin) when is_binary(DataBin) ->
 			mtp3 = Mtp3, parameters = Params}}.
 
 encode_m2pa_msgt(?M2PA_CLASS_M2PA, ?M2PA_TYPE_USER, Mtp3, _Params) when is_binary(Mtp3) ->
-	<<Mtp3/binary>>;
+	<<0:1, 0:7, Mtp3/binary>>;
 encode_m2pa_msgt(?M2PA_CLASS_M2PA, ?M2PA_TYPE_USER, Mtp3, Params) when is_record(Mtp3, mtp3_msg) ->
 	Mtp3bin = mtp3_codec:encode_mtp3_msg(Mtp3),
 	encode_m2pa_msgt(?M2PA_CLASS_M2PA, ?M2PA_TYPE_USER, Mtp3bin, Params);
