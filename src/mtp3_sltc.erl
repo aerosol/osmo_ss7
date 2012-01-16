@@ -82,7 +82,7 @@ handle_info(Info, State, LoopDat) ->
 % STATE: idle
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-idle(M=#mtp3_msg{service_ind = ?MTP3_SERV_MGMT,
+idle(M=#mtp3_msg{service_ind = ?MTP3_SERV_MTN,
 		 payload = #mtp3mg_msg{h0 = ?MTP3MG_H0_TEST,
 			 		h1 = ?MTP3MG_H1_SLTM}}, LoopDat) ->
 	Slta = slta_from_sltm(M),
@@ -101,14 +101,14 @@ idle(start, LoopDat) ->
 % STATE: first_attempt
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-first_attempt(M=#mtp3_msg{service_ind = ?MTP3_SERV_MGMT,
+first_attempt(M=#mtp3_msg{service_ind = ?MTP3_SERV_MTN,
 			  payload = #mtp3mg_msg{h0 = ?MTP3MG_H0_TEST,
 						h1 = ?MTP3MG_H1_SLTM}}, LoopDat) ->
 	Slta = slta_from_sltm(M),
 	send_to(hmrt, Slta, LoopDat),
 	{next_state, first_attempt, LoopDat};
 
-first_attempt(M = #mtp3_msg{service_ind = ?MTP3_SERV_MGMT,
+first_attempt(M = #mtp3_msg{service_ind = ?MTP3_SERV_MTN,
 			    payload = #mtp3mg_msg{h0 = ?MTP3MG_H0_TEST,
 						  h1 = ?MTP3MG_H1_SLTA}}, LoopDat) ->
 	timer:cancel(LoopDat#sltc_state.t1),
@@ -129,14 +129,14 @@ first_attempt(M = #mtp3_msg{service_ind = ?MTP3_SERV_MGMT,
 % STATE: second_attempt
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-second_attempt(M=#mtp3_msg{service_ind = ?MTP3_SERV_MGMT,
+second_attempt(M=#mtp3_msg{service_ind = ?MTP3_SERV_MTN,
 			  payload = #mtp3mg_msg{h0 = ?MTP3MG_H0_TEST,
 						h1 = ?MTP3MG_H1_SLTM}}, LoopDat) ->
 	Slta = slta_from_sltm(M),
 	send_to(hmrt, Slta, LoopDat),
 	{next_state, second_attempt, LoopDat};
 
-second_attempt(M = #mtp3_msg{service_ind = ?MTP3_SERV_MGMT,
+second_attempt(M = #mtp3_msg{service_ind = ?MTP3_SERV_MTN,
 			     payload = #mtp3mg_msg{h0 = ?MTP3MG_H0_TEST,
 						   h1 = ?MTP3MG_H1_SLTA}}, LoopDat) ->
 	timer:cancel(LoopDat#sltc_state.t1),
@@ -165,26 +165,26 @@ send_to(mgmt, What, #sltc_state{mgmt_pid = Txc}) ->
 send_to(lsac, What, #sltc_state{lsac_pid = Txc}) ->
 	Txc ! {sltc_lsac, What}.
 
-slta_from_sltm(M = #mtp3_msg{service_ind = ?MTP3_SERV_MGMT,
+slta_from_sltm(M = #mtp3_msg{service_ind = ?MTP3_SERV_MTN,
 			     routing_label = RoutLbl,
 			     payload = #mtp3mg_msg{h0 = ?MTP3MG_H0_TEST,
 						   h1 = ?MTP3MG_H1_SLTM,
-					   	   test_pattern = TP}}) ->
+					   	   payload = TP}}) ->
 	InvRoutLbl = invert_rout_lbl(RoutLbl),
 	M#mtp3_msg{routing_label = InvRoutLbl,
 		   payload = #mtp3mg_msg{h0 = ?MTP3MG_H0_TEST,
 			   		 h1 = ?MTP3MG_H1_SLTA,
-					 test_pattern = TP}}.
+					 payload = TP}}.
 
 generate_sltm(LoopDat) ->
 	Mg = #mtp3mg_msg{h0 = ?MTP3MG_H0_TEST, h1 = ?MTP3MG_H1_SLTM,
-			 test_pattern = LoopDat#sltc_state.x},
+			 payload = LoopDat#sltc_state.x},
 	Lbl = #mtp3_routing_label{sig_link_sel = LoopDat#sltc_state.sls,
 				  origin_pc = LoopDat#sltc_state.opc,
 				  dest_pc = LoopDat#sltc_state.adj_dpc},
 
 	#mtp3_msg{network_ind = ?MTP3_NETIND_INTERNATIONAL,
-		  service_ind = ?MTP3_SERV_MGMT,
+		  service_ind = ?MTP3_SERV_MTN,
 		  routing_label = Lbl, payload = Mg}.
 
 rout_lbl_matches(#mtp3_routing_label{sig_link_sel = SlsLocal,
@@ -197,7 +197,7 @@ rout_lbl_matches(#mtp3_routing_label{sig_link_sel = SlsLocal,
 	end.
 
 slt_matches(#mtp3_msg{routing_label = RoutLbl,
-		      payload = #mtp3mg_msg{test_pattern = TP}}, LoopDat) ->
+		      payload = #mtp3mg_msg{payload = TP}}, LoopDat) ->
 	case LoopDat#sltc_state.x of
 	    TP ->
 		rout_lbl_matches(RoutLbl, LoopDat);
