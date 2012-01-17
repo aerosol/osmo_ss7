@@ -66,7 +66,7 @@ sua_to_sccp_params(Class, Type, Payload) ->
 	sua_to_sccp_params(Class, Type, Payload, []).
 sua_to_sccp_params(Class, Type, [], List) ->
 	List;
-sua_to_sccp_params(Class, Type, [{ParTag, ParVal}|Remain], List) ->
+sua_to_sccp_params(Class, Type, [{ParTag, {_Len, ParVal}}|Remain], List) ->
 	NewPars = sua_to_sccp_param(Class, Type, ParTag, ParVal),
 	sua_to_sccp_params(Class, Type, Remain, List ++ NewPars).
 
@@ -89,7 +89,10 @@ sua_to_sccp_param(_, _, ?SUA_IEI_IMPORTANCE, Remain) ->
 	<<_:24, Imp:8>> = Remain,
 	[{?SCCP_PNC_IMPORTANCE, Imp}];
 sua_to_sccp_param(_, _, ?SUA_IEI_DATA, Remain) ->
-	[{?SCCP_PNC_DATA, Remain}].
+	[{?SCCP_PNC_DATA, Remain}];
+sua_to_sccp_param(_, _, ?SUA_IEI_ROUTE_CTX, Remain) ->
+	%FIXME: what to do with routing context?
+	[].
 
 sccp_to_sua_params(#sccp_msg{msg_type=Type, parameters=Params}) ->
 	sccp_to_sua_params(Type, Params).
@@ -123,21 +126,21 @@ sua_to_sccp_addr(SuaBin) ->
 	ParList = addr_pars_to_list(Remain),
 	case GTinc of
 		1 ->
-			GTopt = proplists:get_value(?SUA_IEI_GT, ParList),
+			{_, GTopt} = proplists:get_value(?SUA_IEI_GT, ParList),
 			GT = parse_sua_gt(GTopt);
 		0 ->
 			GT = undefined
 	end,
 	case PCinc of
 		1 ->
-			PCopt = proplists:get_value(?SUA_IEI_PC, ParList),
+			{_, PCopt} = proplists:get_value(?SUA_IEI_PC, ParList),
 			PC = parse_sua_pc(PCopt);
 		0 ->
 			PC = undefined
 	end,
 	case SSNinc of
 		1 ->
-			SSNopt = proplists:get_value(?SUA_IEI_SSN, ParList),
+			{_, SSNopt} = proplists:get_value(?SUA_IEI_SSN, ParList),
 			SSN = parse_sua_ssn(SSNopt);
 		0 ->
 			SSN = undefined
@@ -214,12 +217,13 @@ count_digits(Number) when is_list(Number) ->
 
 parse_sua_gt_digits(NoDigits, Remain) ->
 	% as opposed to ISUP/SCCP, we can have more than one nibble padding,
+	io:format("NoDigits=~p (~p)~n", [NoDigits, Remain]),
 	OddEven = NoDigits rem 1,
 	case OddEven of
 		0 ->
-			ByteLen = NoDigits/2;
+			ByteLen = NoDigits div 2;
 		1 ->
-			ByteLen = NoDigits/2 + 1
+			ByteLen = NoDigits div 2 + 1
 	end,
 	<<Bin:ByteLen/binary, _/binary>> = Remain,
 	isup_codec:parse_isup_party(Bin, OddEven).
