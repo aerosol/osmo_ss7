@@ -18,7 +18,7 @@
 % along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 -define(M2PA_PPID,		5).
--define(M2PA_PORT		3565).
+-define(M2PA_PORT,		3565).
 
 % Section 2.1.3
 -define(M2PA_CLASS_M2PA,	11).
