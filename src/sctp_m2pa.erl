@@ -27,7 +27,7 @@
 
 -export([init/1, terminate/3, code_change/4, handle_event/3, handle_info/3]).
 
--export([rx_sctp/4, mtp_xfer/2, state_change/3]).
+-export([rx_sctp/4, mtp_xfer/2, state_change/3, prim_up/3]).
 
 -record(m2pa_state, {
 		last_bsn_received,
@@ -71,6 +71,11 @@ handle_info(_Info, State, LoopDat) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % sctp_core callbacks
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+prim_up(Prim, State, LoopDat) ->
+	% default: forward all primitives to the user 
+	{ok, Prim, LoopDat}.
+
 
 % sctp_core indicates that ew have received some data...
 rx_sctp(#sctp_sndrcvinfo{ppid = ?M2PA_PPID}, Data, State, LoopDat) ->

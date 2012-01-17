@@ -34,7 +34,8 @@
 -export([idle/2, associating/2, established/2]).
 
 behaviour_info(callbacks) ->
-	gen_fsm:behaviour_info(callbacks) ++ [{rx_sctp, 4}, {mtp_xfer, 2}, {state_change, 2}];
+	gen_fsm:behaviour_info(callbacks) ++ 
+	[{rx_sctp, 4}, {mtp_xfer, 2}, {state_change, 2}, {prim_up, 3}];
 behaviour_info(Other) ->
 	gen_fsm:behaviour_info(Other).
 
@@ -127,6 +128,16 @@ send_prim_to_user(LoopDat, Prim) when is_record(LoopDat, sctp_state), is_record(
 	UserPid = LoopDat#sctp_state.user_pid,
 	UserPid ! Prim.
 
+prim_up_to_callback(Prim, State, LoopDat) ->
+	Module = LoopDat#sctp_state.module,
+	case Module:prim_up(Prim, State, LoopDat#sctp_state.ext_state) of
+		{ok, Prim, ExtNew} ->
+			send_prim_to_user(LoopDat, Prim);
+		{ignore, ExtNew} ->
+			ok
+	end,
+	LoopDat#sctp_state{ext_state = ExtNew}.
+
 
 handle_event(Event, State, LoopDat) ->
 	Module = LoopDat#sctp_state.module,
@@ -154,7 +165,8 @@ handle_info({sctp, Socket, _RemoteIp, _RemotePort, {ANC, SAC}},
 					Spec = indication
 			end,
 			% primitive to the user
-			send_prim_to_user(LoopDat, osmo_util:make_prim('M','SCTP_ESTABLISH',Spec));
+			LoopDat2 = prim_up_to_callback(osmo_util:make_prim('M','SCTP_ESTABLISH',Spec),
+						       State, LoopDat);
 		SacState == comm_lost ->
 			case State of
 				releasing ->
@@ -162,11 +174,12 @@ handle_info({sctp, Socket, _RemoteIp, _RemotePort, {ANC, SAC}},
 				_ ->
 					Spec = indication
 			end,
-			send_prim_to_user(LoopDat, osmo_util:make_prim('M','SCTP_RELEASE',Spec)),
+			LoopDat2 = prim_up_to_callback(osmo_util:make_prim('M','SCTP_RELEASE',Spec),
+							State, LoopDat),
 			case LoopDat#sctp_state.role of
 				active ->
 					NewState = associating,
-					reconnect_sctp(LoopDat);
+					reconnect_sctp(LoopDat2);
 				_ ->
 					NewState = idle
 			end;
@@ -177,10 +190,11 @@ handle_info({sctp, Socket, _RemoteIp, _RemotePort, {ANC, SAC}},
 					reconnect_sctp(LoopDat);
 				_ ->
 					NewState = idle
-			end
+			end,
+			LoopDat2 = LoopDat
 	end,
 	inet:setopts(Socket, [{active, once}]),
-	next_state(State, NewState, LoopDat#sctp_state{sctp_assoc_id = AssocId});
+	next_state(State, NewState, LoopDat2#sctp_state{sctp_assoc_id = AssocId});
 
 handle_info({sctp, Socket, RemoteIp, RemotePort, {[Anc], Data}}, State, LoopDat) ->
 	Module = LoopDat#sctp_state.module,
@@ -225,24 +239,34 @@ handle_info(Info, State, LoopDat) ->
 
 
 idle(#primitive{subsystem = 'M', gen_name = 'SCTP_ESTABLISH', spec_name = request}, LoopDat) ->
+	% M-SCTP_ESTABLISH.req from User
 	case LoopDat#sctp_state.role of
 		active ->
 			reconnect_sctp(LoopDat);
 		_ ->
 			ok
 	end,
-	next_state(idle, associating, LoopDat).
+	next_state(idle, associating, LoopDat);
+idle(Prim, LoopDat) when is_record(Prim, primitive) ->
+	LoopDat2 = prim_up_to_callback(Prim, idle, LoopDat),
+	next_state(idle, idle, LoopDat2).
 
 
 
 associating(#primitive{subsystem = 'M', gen_name = 'SCTP_RELEASE',
 			spec_name = request}, LoopDat) ->
+	% M-SCTP_RELEASE.req from User
 	% directly send RELEASE.conf ?!?
-	next_state(associating, idle, LoopDat).
+	next_state(associating, idle, LoopDat);
+associating(Prim, LoopDat) when is_record(Prim, primitive) ->
+	LoopDat2 = prim_up_to_callback(Prim, associating, LoopDat),
+	next_state(associating, associating, LoopDat2).
+
 
 
 established(#primitive{subsystem = 'M', gen_name = 'SCTP_RELEASE',
 			spec_name = request}, LoopDat) ->
+	% M-SCTP_RELEASE.req from User
 	next_state(established, releasing, LoopDat);
 established(#primitive{subsystem = 'MTP', gen_name = 'TRANSFER',
 		       spec_name = request, parameters = Params}, LoopDat) ->
@@ -255,7 +279,10 @@ established(#primitive{subsystem = 'SCTP', gen_name = 'TRANSFER',
 	io:format("SCTP-TRANSFER.req~n",[]),
 	% somebody (typically callback module) requests us to send SCTP data
 	send_sctp_to_peer(LoopDat, Data, Stream, Ppid),
-	next_state(established, established, LoopDat).
+	next_state(established, established, LoopDat);
+established(Prim, LoopDat) when is_record(Prim, primitive) ->
+	LoopDat2 = prim_up_to_callback(Prim, established, LoopDat),
+	next_state(established, established, LoopDat2).
 
 next_state(State, NewState, LoopDat) when is_record(LoopDat, sctp_state) ->
 	Module = LoopDat#sctp_state.module,
