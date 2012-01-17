@@ -43,15 +43,15 @@ sccp_to_sua(M=#sccp_msg{msg_type = Type, parameters = Params}) ->
 sccp_to_sua(Type, Params) when	Type == ?SCCP_MSGT_UDT;
 				Type == ?SCCP_MSGT_XUDT;
 				Type == ?SCCP_MSGT_LUDT ->
-	Opts = sccp_to_sua_params(Params),
-	#sua_msg{msg_class = ?SUA_MSGC_CL, msg_type = ?SUA_CL_CLDT,
-		 payload = Opts};
+	Opts = sccp_to_sua_params(Type, Params),
+	#sua_msg{version = 1, msg_class = ?SUA_MSGC_CL,
+		 msg_type = ?SUA_CL_CLDT, payload = Opts};
 sccp_to_sua(Type, Params) when 	Type == ?SCCP_MSGT_UDTS;
 				Type == ?SCCP_MSGT_XUDTS;
 				Type == ?SCCP_MSGT_LUDTS ->
 	Opts = sccp_to_sua_params(Params),
-	#sua_msg{msg_class = ?SUA_MSGC_CL, msg_type = ?SUA_CL_CLDR,
-		 payload = Opts}.
+	#sua_msg{version=1, msg_class = ?SUA_MSGC_CL,
+		 msg_type = ?SUA_CL_CLDR, payload = Opts}.
 
 
 % CLDT parameters:
@@ -161,7 +161,7 @@ sccp_to_sua_addr(Addr) when is_record(Addr, sccp_addr) ->
 		   global_title = GT} = Addr,
 	case GT of
 		#global_title{} ->
-			GTopt = encode_sua_gt(GT),
+			GTopt = [{?SUA_IEI_GT, encode_sua_gt(GT)}],
 			GTinc = 1;
 		_ ->
 			GTopt = [],
@@ -169,7 +169,7 @@ sccp_to_sua_addr(Addr) when is_record(Addr, sccp_addr) ->
 	end,
 	case PC of
 		Int when is_integer(Int) ->
-			PCopt = encode_sua_pc(PC),
+			PCopt = [{?SUA_IEI_PC, encode_sua_pc(PC)}],
 			PCinc = 1;
 		_ ->
 			PCopt = [],
@@ -177,7 +177,7 @@ sccp_to_sua_addr(Addr) when is_record(Addr, sccp_addr) ->
 	end,
 	case SSN of
 		Int2 when is_integer(Int2) ->
-			SSNopt = encode_sua_ssn(SSN),
+			SSNopt = [{?SUA_IEI_SSN, encode_sua_ssn(SSN)}],
 			SSNinc = 1;
 		_ ->
 			SSNopt = [],
@@ -229,7 +229,8 @@ parse_sua_gt_digits(NoDigits, Remain) ->
 	isup_codec:parse_isup_party(Bin, OddEven).
 encode_sua_gt_digits(Digits) when is_list(Digits); is_integer(Digits) ->
 	% Assume that overall option encoder will do the padding...
-	isup_codec:encode_isup_party(Digits).
+	{Enc, _OddEven} = isup_codec:encode_isup_party(Digits),
+	Enc.
 
 parse_sua_pc(<<PC:32/big>>) ->
 	PC.
