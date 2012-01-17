@@ -21,22 +21,22 @@
 -author('Harald Welte <laforge@gnumonks.org>').
 -include("sua.hrl").
 
--export([parse_msg/1, encode_msg/1]).
+-export([parse_msg/1, encode_msg/1, parse_xua_opts/1, encode_xua_opts/1]).
 
 parse_msg(DataBin) when is_binary(DataBin) ->
 	<<Version:8, _Reserved:8, MsgClass:8, MsgType:8, MsgLen:32/big, Remain/binary>> = DataBin,
-	OptList = parse_sua_opts(Remain),
+	OptList = parse_xua_opts(Remain),
 	#sua_msg{version = Version, msg_class = MsgClass, msg_type = MsgType,
 		 msg_length = MsgLen-4, payload = OptList};
 parse_msg(Data) when is_list(Data) ->
 	parse_msg(list_to_binary(Data)).
 
-parse_sua_opts(OptBin) when is_binary(OptBin) ->
-	parse_sua_opts(OptBin, []).
+parse_xua_opts(OptBin) when is_binary(OptBin) ->
+	parse_xua_opts(OptBin, []).
 
-parse_sua_opts(<<>>, OptList) when is_list(OptList) ->
+parse_xua_opts(<<>>, OptList) when is_list(OptList) ->
 	OptList;
-parse_sua_opts(OptBin, OptList) when is_binary(OptBin), is_list(OptList) ->
+parse_xua_opts(OptBin, OptList) when is_binary(OptBin), is_list(OptList) ->
 	<<Tag:16/big, LengthIncHdr:16/big, Remain/binary>> = OptBin,
 	Length = LengthIncHdr - 4,
 	PadLength = get_num_pad_bytes(Length),
@@ -55,7 +55,7 @@ parse_sua_opts(OptBin, OptList) when is_binary(OptBin), is_list(OptList) ->
 			NextOpts = <<>>
 	end,
 	NewOpt = {Tag, {Length, Value}},
-	parse_sua_opts(NextOpts, OptList ++ [NewOpt]).
+	parse_xua_opts(NextOpts, OptList ++ [NewOpt]).
 
 parse_sua_opt(Opt, Msg) ->
 	{Opt, Msg}.
@@ -63,18 +63,18 @@ parse_sua_opt(Opt, Msg) ->
 
 encode_msg(#sua_msg{version = Version, msg_class = MsgClass,
 		    msg_type = MsgType, payload = OptList}) ->
-	OptBin = encode_sua_opts(OptList),
+	OptBin = encode_xua_opts(OptList),
 	MsgLen = byte_size(OptBin) + 8,
 	<<Version:8, 0:8, MsgClass:8, MsgType:8, MsgLen:32/big, OptBin/binary>>.
 
-encode_sua_opts(OptList) when is_list(OptList) ->
-	encode_sua_opts(OptList, <<>>).
+encode_xua_opts(OptList) when is_list(OptList) ->
+	encode_xua_opts(OptList, <<>>).
 
-encode_sua_opts([], Bin) ->
+encode_xua_opts([], Bin) ->
 	Bin;
-encode_sua_opts([{Iei, Attr}|Tail], Bin) ->
+encode_xua_opts([{Iei, Attr}|Tail], Bin) ->
 	OptBin = encode_sua_opt(Iei, Attr),
-	encode_sua_opts(Tail, <<Bin/binary, OptBin/binary>>).
+	encode_xua_opts(Tail, <<Bin/binary, OptBin/binary>>).
 
 encode_sua_opt(Iei, Data) when is_integer(Iei), is_binary(Data) ->
 	Length = byte_size(Data) + 4,

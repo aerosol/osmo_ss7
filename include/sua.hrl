@@ -81,7 +81,7 @@
 
 -define(SUA_IEI_S7_HOP_CTR,	16#0101).
 -define(SUA_IEI_SRC_ADDR,	16#0102).
--define(SUA_IEI_DEST_ADDRA,	16#0103).
+-define(SUA_IEI_DEST_ADDR,	16#0103).
 -define(SUA_IEI_SRC_REF,	16#0104).
 -define(SUA_IEI_DEST_REF,	16#0105).
 -define(SUA_IEI_CAUSE,		16#0106).
@@ -109,6 +109,11 @@
 -define(SUA_IEI_IPv4,	16#8004).
 -define(SUA_IEI_HOST,	16#8005).
 -define(SUA_IEI_IPv6,	16#8006).
+
+-define(SUA_RI_GT,	1).
+-define(SUA_RI_SSN_PC,	2).
+-define(SUA_RI_HOST,	3).
+-define(SUA_RI_SSN_IP,	4).
 
 -record(sua_msg, {
 	 version	:: 0..255,
