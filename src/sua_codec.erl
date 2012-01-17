@@ -76,6 +76,10 @@ encode_xua_opts([{Iei, Attr}|Tail], Bin) ->
 	OptBin = encode_sua_opt(Iei, Attr),
 	encode_xua_opts(Tail, <<Bin/binary, OptBin/binary>>).
 
+encode_sua_opt(Iei, {LenIn, Data}) when is_integer(Iei), is_binary(Data) ->
+	Length = LenIn + 4,
+	PadLen = get_num_pad_bytes(Length),
+	<<Iei:16/big, Length:16/big, Data/binary, 0:PadLen/integer-unit:8>>;
 encode_sua_opt(Iei, Data) when is_integer(Iei), is_binary(Data) ->
 	Length = byte_size(Data) + 4,
 	PadLen = get_num_pad_bytes(Length),
