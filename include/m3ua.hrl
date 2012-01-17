@@ -1,5 +1,8 @@
 % M3UA in accordance with RFC4666 (http://tools.ietf.org/html/rfc4666)
 
+-define(M3UA_PPID,	3).
+-define(M3UA_PORT,	2905).
+
 -define(M3UA_MSGC_MGMT,			0).	% Management
 -define(M3UA_MSGC_TRANSFER,		1).	% Transfer
 -define(M3UA_MSGC_SSNM,			2).	% SS7 Signalling Network Management

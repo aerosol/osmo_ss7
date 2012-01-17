@@ -17,6 +17,9 @@
 % You should have received a copy of the GNU Affero General Public License
 % along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+-define(SUA_PPID,	4).
+-define(SUA_PORT, 	14001).
+
 % 3.1.2 Message Classes
 -define(SUA_MSGC_MGMT,	0).
 -define(SUA_MSGC_SNM,	2).

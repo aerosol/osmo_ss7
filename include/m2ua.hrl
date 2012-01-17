@@ -1,3 +1,5 @@
+-define(M2UA_PPID,	2).
+-define(M2UA_PORT,	2904).
 
 % RFC 3331 Section 3.1.3 Message Class
 -define(M2UA_MSGC_MGMT,		0).	% Management Messages [IUA/M2UA/M3UA/SUA]
