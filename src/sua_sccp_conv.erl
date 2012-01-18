@@ -38,7 +38,7 @@ sua_to_sccp(?SUA_MSGC_CL, ?SUA_CL_CLDR, Sua) ->
 	#sccp_msg{msg_type = ?SCCP_MSGT_UDTS,
 		parameters = Params}.
 
-sccp_to_sua(M=#sccp_msg{msg_type = Type, parameters = Params}) ->
+sccp_to_sua(#sccp_msg{msg_type = Type, parameters = Params}) ->
 	sccp_to_sua(Type, Params).
 sccp_to_sua(Type, Params) when	Type == ?SCCP_MSGT_UDT;
 				Type == ?SCCP_MSGT_XUDT;
@@ -64,7 +64,7 @@ sua_to_sccp_params(#sua_msg{msg_class=Class, msg_type=Type, payload=Payload}) ->
 	sua_to_sccp_params(Class, Type, Payload).
 sua_to_sccp_params(Class, Type, Payload) ->
 	sua_to_sccp_params(Class, Type, Payload, []).
-sua_to_sccp_params(Class, Type, [], List) ->
+sua_to_sccp_params(_Class, _Type, [], List) ->
 	List;
 sua_to_sccp_params(Class, Type, [{ParTag, {_Len, ParVal}}|Remain], List) ->
 	NewPars = sua_to_sccp_param(Class, Type, ParTag, ParVal),
@@ -72,16 +72,18 @@ sua_to_sccp_params(Class, Type, [{ParTag, {_Len, ParVal}}|Remain], List) ->
 
 % convert an individual SUA parameter to a SCCP option
 sua_to_sccp_param(_, _, ?SUA_IEI_PROTO_CLASS, Remain) ->
-	<<_:24, RetErr:1, _:5, Class:2>> = Remain,
-	[{protocol_class, Class}];
+	<<_:24, PCOpt:4, _:2, Class:2>> = Remain,
+	[{protocol_class, {Class, PCOpt}}];
 sua_to_sccp_param(_, _, ?SUA_IEI_SRC_ADDR, Remain) ->
 	Addr = sua_to_sccp_addr(Remain),
 	[{calling_party_addr, Addr}];
 sua_to_sccp_param(_, _, ?SUA_IEI_DEST_ADDR, Remain) ->
 	Addr = sua_to_sccp_addr(Remain),
 	[{called_party_addr, Addr}];
-sua_to_sccp_param(_, _, ?SUA_IEI_SEQ_CTRL, Remain) ->
-	[{?SCCP_PNC_SEQUENCING, Remain}];
+sua_to_sccp_param(_, _, ?SUA_IEI_SEQ_CTRL, _Remain) ->
+	% If we were to translate to a N-UNITDATA.req, we could map
+	% this, but there is no mapping to a SCCP message...
+	[];
 sua_to_sccp_param(_, _, ?SUA_IEI_S7_HOP_CTR, Remain) ->
 	<<_:24, HopCtr:8>> = Remain,
 	[{?SCCP_PNC_HOP_COUNTER, HopCtr}];
@@ -90,7 +92,7 @@ sua_to_sccp_param(_, _, ?SUA_IEI_IMPORTANCE, Remain) ->
 	[{?SCCP_PNC_IMPORTANCE, Imp}];
 sua_to_sccp_param(_, _, ?SUA_IEI_DATA, Remain) ->
 	[{user_data, Remain}];
-sua_to_sccp_param(_, _, ?SUA_IEI_ROUTE_CTX, Remain) ->
+sua_to_sccp_param(_, _, ?SUA_IEI_ROUTE_CTX, _Remain) ->
 	%FIXME: what to do with routing context?
 	[].
 
@@ -98,22 +100,20 @@ sccp_to_sua_params(#sccp_msg{msg_type=Type, parameters=Params}) ->
 	sccp_to_sua_params(Type, Params).
 sccp_to_sua_params(Type, Params) when is_list(Params) ->
 	sccp_to_sua_params(Type, Params, []).
-sccp_to_sua_params(Type, [], List) ->
+sccp_to_sua_params(_Type, [], List) ->
 	List;
 sccp_to_sua_params(Type, [{ParTag, ParVal}|Tail], List) ->
 	NewPars = sccp_to_sua_param(Type, ParTag, ParVal),
 	sccp_to_sua_params(Type, Tail, List ++ NewPars).
 
-sccp_to_sua_param(_, protocol_class, Class) ->
-	[{?SUA_IEI_PROTO_CLASS, <<0:24, 0:1, 0:5, Class:2>>}];
+sccp_to_sua_param(_, protocol_class, {Opt, Class}) ->
+	[{?SUA_IEI_PROTO_CLASS, <<0:24, Opt:4, 0:2, Class:2>>}];
 sccp_to_sua_param(_, calling_party_addr, Addr) ->
 	AddrSua = sccp_to_sua_addr(Addr),
 	[{?SUA_IEI_SRC_ADDR, AddrSua}];
 sccp_to_sua_param(_, called_party_addr, Addr) ->
 	AddrSua = sccp_to_sua_addr(Addr),
 	[{?SUA_IEI_DEST_ADDR, AddrSua}];
-sccp_to_sua_param(_, ?SCCP_PNC_SEQUENCING, Par) ->
-	[{?SUA_IEI_SEQ_CTRL, Par}];
 sccp_to_sua_param(_, ?SCCP_PNC_HOP_COUNTER, Hop) ->
 	[{?SUA_IEI_S7_HOP_CTR, <<0:24, Hop:8>>}];
 sccp_to_sua_param(_, ?SCCP_PNC_IMPORTANCE, Imp) ->
