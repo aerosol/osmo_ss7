@@ -119,7 +119,6 @@
 	 version	:: 0..255,
 	 msg_class	:: 0..255,
 	 msg_type	:: 0..255,
-	 msg_length	:: non_neg_integer(),
 	 payload
 	}).
 

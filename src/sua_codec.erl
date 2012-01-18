@@ -25,9 +25,10 @@
 
 parse_msg(DataBin) when is_binary(DataBin) ->
 	<<Version:8, _Reserved:8, MsgClass:8, MsgType:8, MsgLen:32/big, Remain/binary>> = DataBin,
+	RemainLen = MsgLen - 4,
 	OptList = parse_xua_opts(Remain),
 	#sua_msg{version = Version, msg_class = MsgClass, msg_type = MsgType,
-		 msg_length = MsgLen-4, payload = OptList};
+		 payload = OptList};
 parse_msg(Data) when is_list(Data) ->
 	parse_msg(list_to_binary(Data)).
 
