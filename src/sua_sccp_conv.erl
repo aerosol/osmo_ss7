@@ -73,13 +73,13 @@ sua_to_sccp_params(Class, Type, [{ParTag, {_Len, ParVal}}|Remain], List) ->
 % convert an individual SUA parameter to a SCCP option
 sua_to_sccp_param(_, _, ?SUA_IEI_PROTO_CLASS, Remain) ->
 	<<_:24, RetErr:1, _:5, Class:2>> = Remain,
-	[{?SCCP_PNC_PROTOCOL_CLASS, Class}];
+	[{protocol_class, Class}];
 sua_to_sccp_param(_, _, ?SUA_IEI_SRC_ADDR, Remain) ->
 	Addr = sua_to_sccp_addr(Remain),
-	[{?SCCP_PNC_CALLING_PARTY_ADDRESS, Addr}];
+	[{calling_party_addr, Addr}];
 sua_to_sccp_param(_, _, ?SUA_IEI_DEST_ADDR, Remain) ->
 	Addr = sua_to_sccp_addr(Remain),
-	[{?SCCP_PNC_CALLED_PARTY_ADDRESS, Addr}];
+	[{called_party_addr, Addr}];
 sua_to_sccp_param(_, _, ?SUA_IEI_SEQ_CTRL, Remain) ->
 	[{?SCCP_PNC_SEQUENCING, Remain}];
 sua_to_sccp_param(_, _, ?SUA_IEI_S7_HOP_CTR, Remain) ->
@@ -89,7 +89,7 @@ sua_to_sccp_param(_, _, ?SUA_IEI_IMPORTANCE, Remain) ->
 	<<_:24, Imp:8>> = Remain,
 	[{?SCCP_PNC_IMPORTANCE, Imp}];
 sua_to_sccp_param(_, _, ?SUA_IEI_DATA, Remain) ->
-	[{?SCCP_PNC_DATA, Remain}];
+	[{user_data, Remain}];
 sua_to_sccp_param(_, _, ?SUA_IEI_ROUTE_CTX, Remain) ->
 	%FIXME: what to do with routing context?
 	[].
@@ -104,12 +104,12 @@ sccp_to_sua_params(Type, [{ParTag, ParVal}|Tail], List) ->
 	NewPars = sccp_to_sua_param(Type, ParTag, ParVal),
 	sccp_to_sua_params(Type, Tail, List ++ NewPars).
 
-sccp_to_sua_param(_, ?SCCP_PNC_PROTOCOL_CLASS, Class) ->
+sccp_to_sua_param(_, protocol_class, Class) ->
 	[{?SUA_IEI_PROTO_CLASS, <<0:24, 0:1, 0:5, Class:2>>}];
-sccp_to_sua_param(_, ?SCCP_PNC_CALLING_PARTY_ADDRESS, Addr) ->
+sccp_to_sua_param(_, calling_party_addr, Addr) ->
 	AddrSua = sccp_to_sua_addr(Addr),
 	[{?SUA_IEI_SRC_ADDR, AddrSua}];
-sccp_to_sua_param(_, ?SCCP_PNC_CALLED_PARTY_ADDRESS, Addr) ->
+sccp_to_sua_param(_, called_party_addr, Addr) ->
 	AddrSua = sccp_to_sua_addr(Addr),
 	[{?SUA_IEI_DEST_ADDR, AddrSua}];
 sccp_to_sua_param(_, ?SCCP_PNC_SEQUENCING, Par) ->
@@ -118,7 +118,7 @@ sccp_to_sua_param(_, ?SCCP_PNC_HOP_COUNTER, Hop) ->
 	[{?SUA_IEI_S7_HOP_CTR, <<0:24, Hop:8>>}];
 sccp_to_sua_param(_, ?SCCP_PNC_IMPORTANCE, Imp) ->
 	[{?SUA_IEI_IMPORTANCE, <<0:24, Imp:8>>}];
-sccp_to_sua_param(_, ?SCCP_PNC_DATA, Data) ->
+sccp_to_sua_param(_, user_data, Data) ->
 	[{?SUA_IEI_DATA, Data}].
 
 sua_to_sccp_addr(SuaBin) ->
@@ -196,12 +196,12 @@ parse_sua_gt(Bin) ->
 	<<_:24, GTI:8, NoDigits:8, TransType:8, NumPlan:8, NAI:8, Remain/binary>> = Bin,
 	Number = parse_sua_gt_digits(NoDigits, Remain),
 	#global_title{gti = GTI, nature_of_addr_ind = NAI,
-		      trans_type = TransType, encoding = fixme,
+		      trans_type = TransType,
 		      numbering_plan = NumPlan,
 		      phone_number = Number}.
 encode_sua_gt(Gt) when is_record(Gt, global_title) ->
 	#global_title{gti = GTI, nature_of_addr_ind = NAI,
-		      trans_type = TransType, encoding = Encoding,
+		      trans_type = TransType,
 		      numbering_plan = NumPlan,
 		      phone_number = Number} = Gt,
 	NoDigits = count_digits(Number),
@@ -217,7 +217,6 @@ count_digits(Number) when is_list(Number) ->
 
 parse_sua_gt_digits(NoDigits, Remain) ->
 	% as opposed to ISUP/SCCP, we can have more than one nibble padding,
-	io:format("NoDigits=~p (~p)~n", [NoDigits, Remain]),
 	OddEven = NoDigits rem 1,
 	case OddEven of
 		0 ->
