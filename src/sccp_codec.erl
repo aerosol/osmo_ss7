@@ -85,7 +85,7 @@ parse_gt(BinGT, GTind) ->
 			<<TransType:8, NumPlan:4, Enc:4, Digits/binary>> = BinGT,
 			PhoneNum = isup_codec:parse_isup_party(Digits, enc_is_odd(Enc)),
 			#global_title{gti = GTind,
-				      trans_type = TransType, encoding = Enc, 
+				      trans_type = TransType,
 				      numbering_plan = NumPlan,
 				      phone_number = PhoneNum};
 		?SCCP_GTI_TT_NP_ENC_NAT ->
@@ -93,7 +93,7 @@ parse_gt(BinGT, GTind) ->
 			<<TransType:8, NumPlan:4, Enc:4, 0:1, Nature:7, Digits/binary>> = BinGT,
 			PhoneNum = isup_codec:parse_isup_party(Digits, enc_is_odd(Enc)),
 			#global_title{gti = GTind,
-				      trans_type = TransType, encoding = Enc,
+				      trans_type = TransType,
 				      numbering_plan = NumPlan,
 				      nature_of_addr_ind = Nature,
 				      phone_number = PhoneNum};
@@ -249,7 +249,7 @@ encode_gt(undefined) ->
 	{?SCCP_GTI_NO_GT, <<>>};
 encode_gt(#global_title{gti = GTind, phone_number = PhoneNum,
 			nature_of_addr_ind = Nature,
-			trans_type = TransType, encoding = _EncOrig,
+			trans_type = TransType,
 			numbering_plan = NumPlan}) ->
 	case GTind of
 		?SCCP_GTI_NO_GT ->
