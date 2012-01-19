@@ -190,9 +190,12 @@ initial_alignment(alignment_not_possible, LoopDat) ->
 	send_to(txc, si_os, LoopDat),
 	{next_state, out_of_service, LoopDat#lsc_state{local_proc_out=0, emergency=0}};
 
-% ignore
+% forward into IAC sub-state-machine
 initial_alignment(What, LoopDat) when
-		What == si_n; What == si_e; What == si_o; What == si_os ->
+		What == si_n; What == si_e; What == si_o; What == si_os;
+		What == fisu_msu_received ->
+	Iac = LoopDat#lsc_state.iac_pid,
+	gen_fsm:send_event(Iac, What),
 	{next_state, initial_alignment, LoopDat}.
 
 

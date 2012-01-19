@@ -136,8 +136,9 @@ handle_linkstate(M2pa, LoopDat) when is_record(M2pa, m2pa_msg) ->
 	   LsMtp2 == si_po ->
 		gen_fsm:send_event(LoopDat#m2pa_state.lsc_pid, LsMtp2);
 	   LsMtp2 == si_n; LsMtp2 == si_e; LsMtp2 == si_o; LsMtp2 == si_os ->
-		gen_fsm:send_event(LoopDat#m2pa_state.lsc_pid, LsMtp2),
-		gen_fsm:send_event(LoopDat#m2pa_state.iac_pid, LsMtp2)
+		gen_fsm:send_event(LoopDat#m2pa_state.lsc_pid, LsMtp2)
+		% IAC will receive the event as pass-through from LSC
+		%gen_fsm:send_event(LoopDat#m2pa_state.iac_pid, LsMtp2)
 	end.
 
 % convert M2PA link state to MTP2
