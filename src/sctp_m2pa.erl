@@ -77,7 +77,7 @@ prim_up(Prim, State, LoopDat) ->
 	{ok, Prim, LoopDat}.
 
 
-% sctp_core indicates that ew have received some data...
+% sctp_core indicates that we have received some data...
 rx_sctp(#sctp_sndrcvinfo{ppid = ?M2PA_PPID}, Data, State, LoopDat) ->
 	{ok, M2pa} = m2pa_codec:parse_msg(Data),
 	FsnRecv = M2pa#m2pa_msg.fwd_seq_nr,
@@ -86,8 +86,15 @@ rx_sctp(#sctp_sndrcvinfo{ppid = ?M2PA_PPID}, Data, State, LoopDat) ->
 		#m2pa_msg{msg_class = ?M2PA_CLASS_M2PA,
 			  msg_type = ?M2PA_TYPE_USER} ->
 			Mtp3 = M2pa#m2pa_msg.mtp3,
+			LoopDat2 = LoopDat#m2pa_state{last_bsn_received = FsnRecv},
+			case Mtp3 of
+				undefined ->
+					ok;
+				_ ->
+					send_userdata_ack(LoopDat2)
+			end,
 			Prim = osmo_util:make_prim('MTP','TRANSFER',indication, Mtp3),
-			{ok, Prim, LoopDat#m2pa_state{last_bsn_received = FsnRecv}};
+			{ok, Prim, LoopDat2};
 		#m2pa_msg{msg_type = ?M2PA_TYPE_LINK} ->
 			handle_linkstate(M2pa, LoopDat),
 			{ignore, LoopDat};
@@ -197,6 +204,14 @@ send_linkstate(Ls, LoopDat) when is_integer(Ls) ->
 	M2paBin = m2pa_codec:encode_msg(M2pa),
 	tx_sctp(Stream, M2paBin),
 	LoopDat.
+
+send_userdata_ack(LoopDat) ->
+	M2pa = #m2pa_msg{msg_class = ?M2PA_CLASS_M2PA,
+			 msg_type = ?M2PA_TYPE_USER,
+			 fwd_seq_nr = LoopDat#m2pa_state.last_fsn_sent,
+			 back_seq_nr = LoopDat#m2pa_state.last_bsn_received},
+	M2paBin = m2pa_codec:encode_msg(M2pa),
+	tx_sctp(0, M2paBin).
 
 tx_sctp(Stream, Payload) when is_integer(Stream), is_binary(Payload) ->
 	Param = {Stream, ?M2PA_PPID, Payload},
