@@ -37,7 +37,7 @@ parse_m2pa_msgt(?M2PA_CLASS_M2PA, ?M2PA_TYPE_LINK, Len, Remain) ->
 			{undefined, Ret}
 	end;
 parse_m2pa_msgt(?M2PA_CLASS_M2PA, ?M2PA_TYPE_USER, 16, <<>>) ->
-	{empty, []};
+	{undefined, []};
 parse_m2pa_msgt(?M2PA_CLASS_M2PA, ?M2PA_TYPE_USER, Len, RemainIn) ->
 	<<Pri:1, _:7, Mtp3Bin/binary>> = RemainIn,
 	Mtp3 = mtp3_codec:parse_mtp3_msg(Mtp3Bin),
@@ -51,7 +51,7 @@ parse_msg(DataBin) when is_binary(DataBin) ->
 			fwd_seq_nr = FSN, back_seq_nr = BSN,
 			mtp3 = Mtp3, parameters = Params}}.
 
-encode_m2pa_msgt(?M2PA_CLASS_M2PA, ?M2PA_TYPE_USER, empty, _Params) ->
+encode_m2pa_msgt(?M2PA_CLASS_M2PA, ?M2PA_TYPE_USER, undefined, _Params) ->
 	<<>>;
 encode_m2pa_msgt(?M2PA_CLASS_M2PA, ?M2PA_TYPE_USER, Mtp3, _Params) when is_binary(Mtp3) ->
 	<<0:1, 0:7, Mtp3/binary>>;
