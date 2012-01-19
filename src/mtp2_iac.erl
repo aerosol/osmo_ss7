@@ -146,6 +146,10 @@ not_aligned(What, LoopDat) when What == si_o; What == si_n ->
 not_aligned(emergency, LoopDat) ->
 	% mark emergency
 	{next_state, not_aligned, LoopDat#iac_state{emergency=1}};
+not_aligned(si_os, LoopDat) ->
+	% ignore SIOS in this state, as some implementations (notably
+	% yate) seem to send it in violation of the spec
+	{next_state, not_aligned, LoopDat};
 not_aligned({timer_expired, t2}, LoopDat) ->
 	% send 'alignment not possible' to LSC
 	send_to_lsc(alignment_not_possible, LoopDat),
