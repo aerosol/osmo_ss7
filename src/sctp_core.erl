@@ -183,7 +183,8 @@ handle_info({sctp, Socket, _RemoteIp, _RemotePort, {ANC, SAC}},
 				_ ->
 					NewState = idle
 			end;
-		SacState == addr_unreachable ->
+		SacState == addr_unreachable;
+		SacState == cant_assoc	->
 			case LoopDat#sctp_state.role of
 				active ->
 					NewState = associating,
