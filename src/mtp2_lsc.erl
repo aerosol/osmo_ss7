@@ -135,6 +135,11 @@ out_of_service(What, LoopDat) when	What == local_processor_outage;
 					What == level3_failure ->
 	{next_state, out_of_service, LoopDat#lsc_state{local_proc_out=1}};
 
+out_of_service(si_os, LoopDat) ->
+	% this transition is not specified in Q.703, but it makes
+	% quite a bit of sense.  yate M2PA requires it, too.
+	{next_state, out_of_service, LoopDat};
+
 out_of_service(local_processor_recovered, LoopDat) ->
 	{next_state, out_of_service, LoopDat#lsc_state{local_proc_out=0}}.
 
