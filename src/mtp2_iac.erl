@@ -181,7 +181,6 @@ aligned(What, LoopDat) when What == si_n; What == si_e ->
 	% send Start to AERM
 	send_to_aerm(start, LoopDat),
 	% start T4
-	io:format("trying to start T4, T4tout=~p~n", [T4tout]),
 	{ok, T4} = timer:apply_after(T4tout, gen_fsm, send_event,
 				     [self(), {timer_expired, t4}]),
 	% Cp := 0
