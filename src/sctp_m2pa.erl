@@ -33,7 +33,8 @@
 		last_bsn_received,
 		last_fsn_sent,
 		lsc_pid,
-		iac_pid
+		iac_pid,
+		msu_fisu_accepted
 	}).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -42,11 +43,12 @@
 
 init(_InitOpts) ->
 	% start MTP2 IAC FSM pointing LSC, AERM and TXC to us
-	{ok, Lsc} = gen_fsm:start_link(mtp2_lsc, [self(), self(), self(),self()], [{debug, [trace]}]),
+	{ok, Lsc} = gen_fsm:start_link(mtp2_lsc, [self(), self(), self(), self(),self()], [{debug, [trace]}]),
 	{ok, Iac} = gen_fsm:sync_send_event(Lsc, get_iac_pid),
 	gen_fsm:send_event(Lsc, power_on),
 	{ok, #m2pa_state{last_bsn_received=16#ffffff, last_fsn_sent=16#ffffff,
-			 lsc_pid=Lsc, iac_pid=Iac}}.
+			 lsc_pid=Lsc, iac_pid=Iac,
+		 	 msu_fisu_accepted = 0}}.
 
 terminate(Reason, _State, _LoopDat) ->
 	io:format("Terminating ~p (Reason ~p)~n", [?MODULE, Reason]),
@@ -61,6 +63,10 @@ handle_event(_Event, State, LoopDat) ->
 handle_info({lsc_txc, What}, State, LoopDat) when
 			What == start; What == retrieval_request_and_fsnc ->
 	{next_state, State, LoopDat};
+handle_info({lsc_rc, accept_msu_fisu}, State, LoopDat) ->
+	{next_state, State, LoopDat#m2pa_state{msu_fisu_accepted = 1}};
+handle_info({lsc_rc, reject_msu_fisu}, State, LoopDat) ->
+	{next_state, State, LoopDat#m2pa_state{msu_fisu_accepted = 0}};
 handle_info({Who, What}, established, LoopDat) when Who == iac_txc; Who == lsc_txc ->
 	Ls = iac_to_ls(What),
 	send_linkstate(Ls, LoopDat),
@@ -86,15 +92,21 @@ rx_sctp(#sctp_sndrcvinfo{ppid = ?M2PA_PPID}, Data, State, LoopDat) ->
 		#m2pa_msg{msg_class = ?M2PA_CLASS_M2PA,
 			  msg_type = ?M2PA_TYPE_USER} ->
 			Mtp3 = M2pa#m2pa_msg.mtp3,
-			LoopDat2 = LoopDat#m2pa_state{last_bsn_received = FsnRecv},
-			case Mtp3 of
-				undefined ->
-					ok;
+			case LoopDat#m2pa_state.msu_fisu_accepted of
+				1 ->
+					LoopDat2 = LoopDat#m2pa_state{last_bsn_received = FsnRecv},
+					case Mtp3 of
+						undefined ->
+							ok;
+						_ ->
+							send_userdata_ack(LoopDat2)
+					end,
+					gen_fsm:send_event(LoopDat#m2pa_state.lsc_pid, fisu_msu_received),
+					Prim = osmo_util:make_prim('MTP','TRANSFER',indication, Mtp3),
+					{ok, Prim, LoopDat2};
 				_ ->
-					send_userdata_ack(LoopDat2)
-			end,
-			Prim = osmo_util:make_prim('MTP','TRANSFER',indication, Mtp3),
-			{ok, Prim, LoopDat2};
+					{ignore, LoopDat}
+			end;
 		#m2pa_msg{msg_type = ?M2PA_TYPE_LINK} ->
 			handle_linkstate(M2pa, LoopDat),
 			{ignore, LoopDat};
@@ -139,7 +151,12 @@ handle_linkstate(M2pa, LoopDat) when is_record(M2pa, m2pa_msg) ->
 	Linkstate = proplists:get_value(link_state, M2pa#m2pa_msg.parameters),
 	LsMtp2 = ls_to_iac(Linkstate),
 	if LsMtp2 == fisu ->
-		gen_fsm:send_event(LoopDat#m2pa_state.lsc_pid, fisu_msu_received);
+		case LoopDat#m2pa_state.msu_fisu_accepted of
+			1 ->
+				gen_fsm:send_event(LoopDat#m2pa_state.lsc_pid,
+						   fisu_msu_received);
+			0 -> ok
+		end;
 	   LsMtp2 == si_po ->
 		gen_fsm:send_event(LoopDat#m2pa_state.lsc_pid, LsMtp2);
 	   LsMtp2 == si_n; LsMtp2 == si_e; LsMtp2 == si_o; LsMtp2 == si_os ->

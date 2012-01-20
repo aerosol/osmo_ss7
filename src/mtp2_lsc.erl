@@ -40,6 +40,7 @@
 		l3_pid,
 		poc_pid,
 		txc_pid,
+		rc_pid,
 		local_proc_out,
 		proc_out,
 		emergency
@@ -51,7 +52,7 @@
 % gen_fsm callbacks
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-init([Aerm, Txc, L3, Poc]) ->
+init([Aerm, Rc, Txc, L3, Poc]) ->
 	{ok, Iac} = gen_fsm:start_link(mtp2_iac, [self(), Aerm, Txc], [{debug, [trace]}]),
 	LscState = #lsc_state{t1_timeout = ?M2PA_T1_DEF,
 			      iac_pid = Iac,
@@ -59,6 +60,7 @@ init([Aerm, Txc, L3, Poc]) ->
 			      l3_pid = L3,
 			      poc_pid = L3,
 			      txc_pid = Txc,
+			      rc_pid = Rc,
 		      	      local_proc_out = 0,
 		      	      proc_out = 0,
 		      	      emergency = 0},
@@ -168,11 +170,11 @@ initial_alignment(alignment_complete, LoopDat) ->
 		1 ->
 			send_to(poc, local_processor_outage, LoopDat),
 			send_to(txc, si_po, LoopDat),
-			send_to(rc, reject_msu_fiso, LoopDat),
+			send_to(rc, reject_msu_fisu, LoopDat),
 			NextState = aligned_not_ready;
 		_ ->
 			send_to(txc, fisu, LoopDat),
-			send_to(rc, accept_msu_fiso, LoopDat),
+			send_to(rc, accept_msu_fisu, LoopDat),
 			NextState = aligned_ready
 	end,
 	{next_state, NextState, LoopDat#lsc_state{t1=T1}};
@@ -247,7 +249,7 @@ aligned_ready(What, LoopDat) when	What == local_processor_outage;
 					What == level3_failure ->
 	send_to(poc, local_processor_outage, LoopDat),
 	send_to(txc, si_po, LoopDat),
-	send_to(rc, reject_msu_fiso, LoopDat),
+	send_to(rc, reject_msu_fisu, LoopDat),
 	{next_state, aligned_not_ready, LoopDat}.
 
 
@@ -407,6 +409,8 @@ send_to(txc, What, #lsc_state{txc_pid = Txc}) ->
 	Txc ! {lsc_txc, What};
 send_to(iac, What, #lsc_state{iac_pid = Iac}) ->
 	gen_fsm:send_event(Iac, What);
+send_to(rc, What, #lsc_state{rc_pid = Rc}) ->
+	Rc ! {lsc_rc, What};
 send_to(Who, What, _LoopDat) ->
 	io:format("Not sending LSC -> ~p: ~p~n", [Who, What]).
 

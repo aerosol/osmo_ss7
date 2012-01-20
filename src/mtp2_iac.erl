@@ -298,10 +298,6 @@ proving({timer_expired, t4}, LoopDat) ->
 			send_to_lsc(alignment_complete, LoopDat),
 			fig9_4(LoopDat)
 	end;
-proving(fisu_msu_received, LoopDat) ->
-	% ignore FISU/MSU in this state, as some implementations
-	% (notably yate) seem to send it in violation of the spec
-	{next_state, proving, LoopDat};
 proving(abort_proving, LoopDat) ->
 	% Cp := Cp + 1
 	Cp = LoopDat#iac_state.cp,
