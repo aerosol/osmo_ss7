@@ -147,8 +147,8 @@ send_close_signal([]) ->
 	ok;
 send_close_signal([StreamSpec|Tail]) ->
 	io:format("FIXME: send_close_signal ~p ~p~n", [StreamSpec, Tail]),
-	%[{{Socket, StreamID, Pid}}] = StreamSpec,
-	%Pid ! {ipa_closed, {Socket, StreamID}},
+	[{{Socket, StreamID, Pid}}] = StreamSpec,
+	Pid ! {ipa_closed, {Socket, StreamID}},
 	send_close_signal(Tail).
 	
 process_tcp_closed(S, StreamMap) ->
@@ -222,9 +222,9 @@ process_ccm_msg(Socket, StreamID, ?IPAC_MSGT_PING, _) ->
 	io:format("Socket ~p Stream ~p: PING -> PONG~n", [Socket, StreamID]),
 	send(Socket, StreamID, <<?IPAC_MSGT_PONG>>);
 % Simply respond to ID_ACK with ID_ACK
-process_ccm_msg(_Socket, _StreamID, ?IPAC_MSGT_ID_ACK, _) ->
-%	send(Socket, StreamID, <<?IPAC_MSGT_ID_ACK>>);
-	ok;
+process_ccm_msg(Socket, StreamID, ?IPAC_MSGT_ID_ACK, _) ->
+	io:format("Socket ~p Stream ~p: ID_ACK -> ID_ACK~n", [Socket, StreamID]),
+	send(Socket, StreamID, <<?IPAC_MSGT_ID_ACK>>);
 % Simply respond to ID_RESP with ID_ACK
 process_ccm_msg(Socket, StreamID, ?IPAC_MSGT_ID_RESP, _) ->
 	io:format("Socket ~p Stream ~p: ID_RESP -> ID_ACK~n", [Socket, StreamID]),
@@ -265,8 +265,8 @@ connect(Address, Port, Options, Timeout) ->
 	case gen_tcp:connect(Address, Port, ?IPA_SOCKOPTS ++ Options, Timeout) of
 		{ok, Socket} ->
 			case ipa_proto:register_socket(Socket) of
-				{ok, _} ->
-					{ok, Socket};
+				{ok, IpaPid} ->
+					{ok, {Socket, IpaPid}};
 				{error, Reason} ->
 					gen_tcp:close(Socket),
 					{error, Reason}
