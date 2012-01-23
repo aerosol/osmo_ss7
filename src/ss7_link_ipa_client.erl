@@ -67,6 +67,7 @@ reconnect(LoopDat = #loop_dat{link=Link}) ->
 		{ok, {Socket, IpaPid}} ->
 			set_link_state(LoopDat, up),
 			ipa_proto:register_stream(Socket, 253, {callback_fn, fun ipa_tx_to_sccp/4, []}),
+			set_link_state(LoopDat, active),
 			ipa_proto:unblock(Socket),
 			{ok, LoopDat#loop_dat{ipa_pid=IpaPid, socket=Socket}};
 		{error, Reason} ->
