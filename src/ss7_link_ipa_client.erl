@@ -50,14 +50,14 @@ init(L = #sigtran_link{type = ipa_client, name = Name, linkset_name = LinksetNam
 handle_info({ipa_closed, {_Sock, _Stream}}, LoopDat) ->
 	set_link_state(LoopDat, down),
 	{ok, LoopDat2} = reconnect(LoopDat),
-	{no_reply, LoopDat2}.
+	{noreply, LoopDat2}.
 
 handle_cast(#primitive{subsystem='MTP', gen_name='TRANSFER', spec_name=request,
 		       parameters = #mtp3_msg{service_ind = ?MTP3_SERV_SCCP,
 		       			    payload = Data}}, LoopDat) ->
 	#loop_dat{socket = Socket, ipa_pid = Pid} = LoopDat,
 	Pid ! {ipa_send, Socket, 253, Data},
-	{no_reply, LoopDat}.
+	{noreply, LoopDat}.
 
 reconnect(LoopDat = #loop_dat{link=Link}) ->
 	#sigtran_link{local = Local, remote = Remote} = Link,
@@ -81,4 +81,4 @@ set_link_state(#loop_dat{link = #sigtran_link{linkset_name = LinksetName, sls = 
 % Callback that we pass to the ipa_proto, which it will call when it wants to
 % send a primitive up the stack to SCCP
 ipa_tx_to_sccp(_Socket, 253, Data, _Args) ->
-	osmo_ss7:mtp3_rx(#mtp3_msg{service_ind=?MTP3_SERV_SCCP, payload=Data}).
+	ss7_links:mtp3_rx(#mtp3_msg{service_ind=?MTP3_SERV_SCCP, payload=Data}).
