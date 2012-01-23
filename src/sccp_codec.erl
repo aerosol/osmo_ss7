@@ -274,13 +274,10 @@ encode_gt(#global_title{gti = GTind, phone_number = PhoneNum,
 			{GTind, <<TransType:8, NumPlan:4, Enc:4, 0:1, Nature:7, PhoneBin/binary>>}
 	end.
 
+encode_pc(undefined) ->
+	{0, <<>>};
 encode_pc(PointCode) when is_integer(PointCode) ->
-	case PointCode of
-		undefined ->
-			{0, <<>>};
-		_ ->
-			{1, <<PointCode:16/little>>}
-	end;
+	{1, <<PointCode:16/little>>};
 encode_pc(PcRec) ->
 	PcInt = osmo_util:pointcode2int(PcRec),
 	encode_pc(PcInt).
