@@ -145,6 +145,8 @@ make_prim(Subsys, GenName, SpecName, Param) ->
 % parse a 3-tuple pointcode into a raw integer
 pointcode2int(Int) when is_integer(Int) ->
 	Int;
+pointcode2int(undefined) ->
+	undefined;
 pointcode2int(#pointcode{repr=Type, value=Value}) ->
 	pointcode2int(Type, Value);
 pointcode2int({Std, Param}) ->
