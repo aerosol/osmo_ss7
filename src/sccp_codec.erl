@@ -111,8 +111,9 @@ parse_sccp_addr(BinAddr) when is_binary(BinAddr) ->
 		   point_code = OptPC, ssn = OptSSN, global_title = OptGT}.
 
 % parse SCCP Optional Part
-parse_sccp_opt(OptType, OptLen, Content) ->
-	{OptType, {OptLen, Content}}.
+parse_sccp_opt(OptType, _OptLen, Content) ->
+	OptAtom = opt_to_atom(OptType),
+	{OptAtom, Content}.
 
 parse_sccp_opts(<<>>, OptList) ->
 	% empty list
@@ -124,6 +125,7 @@ parse_sccp_opts(OptBin, OptList) ->
 	<<OptType, OptLen, Content:OptLen/binary, Remain/binary>> = OptBin,
 	NewOpt = parse_sccp_opt(OptType, OptLen, Content),
 	parse_sccp_opts(Remain, [NewOpt|OptList]).
+
 
 % Parse incoming SCCP message, one function for every message type
 parse_sccp_msgt(?SCCP_MSGT_CR, DataBin) ->
@@ -312,42 +314,59 @@ encode_sccp_addr(#sccp_addr{res_nat_use = ResNatUse,
 	<<ResNatOut:1, RoutIndOut:1, GTind:4, SSNind:1, PCind:1, PCbin/binary, SSNbin/binary, GTbin/binary>>.
 
 
-encode_sccp_opt({OptNum, {DataBinLen, DataBin}}) when is_integer(OptNum) ->
-	DataBinLen8 = DataBinLen*8,
-	<<OptNum:8, DataBinLen:8, DataBin:DataBinLen8>>;
-encode_sccp_opt({OptAtom,_}) when is_atom(OptAtom) ->
-	<<>>.
+encode_sccp_opt({AddrTag, AddrVal}) when AddrTag == ?SCCP_PNC_CALLED_PARTY_ADDRESS;
+					 AddrTag == ?SCCP_PNC_CALLING_PARTY_ADDRESS ->
+	AddrEnc = encode_sccp_addr(AddrVal),
+	AddrLen = byte_size(AddrEnc),
+	<<AddrTag:8, AddrLen:8, AddrEnc/binary>>;
+encode_sccp_opt({OptInt, DataBin}) when is_binary(DataBin), is_integer(OptInt) ->
+	DataBinLen = byte_size(DataBin),
+	<<OptInt:8, DataBinLen:8, DataBin/binary>>;
+encode_sccp_opt({Opt, DataBin}) when is_atom(Opt) ->
+	OptNum = atom_to_opt(Opt),
+	encode_sccp_opt({OptNum, DataBin});
+encode_sccp_opt({Opt, DataInt}) when is_integer(DataInt), DataInt =< 255 ->
+	encode_sccp_opt({Opt, <<DataInt:8>>});
+encode_sccp_opt({Opt, DataList}) when is_list(DataList) ->
+	encode_sccp_opt({Opt, list_to_binary(DataList)}).
 
-encode_sccp_opts([], OptEnc) ->
+encode_sccp_opts(OptList, Filter) ->
+	FilteredList = lists:filter(fun({Tag, _Val}) -> proplists:is_defined(opt_to_atom(Tag), Filter) end, OptList),
+	e_sccp_opts(FilteredList, []).
+
+e_sccp_opts([], OptEnc) ->
 	% end of options + convert to binary
 	list_to_binary([OptEnc, ?SCCP_PNC_END_OF_OPTIONAL]);
-encode_sccp_opts([CurOpt|OptPropList], OptEnc) ->
+e_sccp_opts([CurOpt|OptPropList], OptEnc) ->
 	CurOptEnc = encode_sccp_opt(CurOpt),
-	encode_sccp_opts(OptPropList, list_to_binary([OptEnc,CurOptEnc])).
+	e_sccp_opts(OptPropList, list_to_binary([OptEnc,CurOptEnc])).
 
-	
 
 encode_sccp_msgt(?SCCP_MSGT_CR, Params) ->
 	SrcLocalRef = proplists:get_value(src_local_ref, Params),
 	{ProtoClass, PCOpt} = proplists:get_value(protocol_class, Params),
-	OptBin = encode_sccp_opts(Params, []),
-	<<?SCCP_MSGT_CR:8, SrcLocalRef:24/big, PCOpt:4, ProtoClass:4, OptBin/binary>>;
+	CalledParty = proplists:get_value(called_party_addr, Params),
+	CalledPartyEnc = encode_sccp_addr(CalledParty),
+	CalledPartyLen = byte_size(CalledPartyEnc),
+	PtrOpt = CalledPartyLen+1+1,
+	OptBin = encode_sccp_opts(Params, [credit, calling_party_addr, user_data, hop_counter, importance]),
+	<<?SCCP_MSGT_CR:8, SrcLocalRef:24/big, PCOpt:4, ProtoClass:4, 2:8, PtrOpt:8, CalledPartyLen:8, CalledPartyEnc/binary, OptBin/binary>>;
 encode_sccp_msgt(?SCCP_MSGT_CC, Params) ->
 	SrcLocalRef = proplists:get_value(src_local_ref, Params),
 	DstLocalRef = proplists:get_value(dst_local_ref, Params),
 	{ProtoClass, PCOpt} = proplists:get_value(protocol_class, Params),
-	OptBin = encode_sccp_opts(Params, []),
+	OptBin = encode_sccp_opts(Params, [credit, called_party_addr, user_data, importance]),
 	<<?SCCP_MSGT_CC:8, DstLocalRef:24/big, SrcLocalRef:24/big, PCOpt:4, ProtoClass:4, OptBin/binary>>;
 encode_sccp_msgt(?SCCP_MSGT_CREF, Params) ->
 	DstLocalRef = proplists:get_value(dst_local_ref, Params),
 	RefusalCause = proplists:get_value(refusal_cause, Params),
-	OptBin = encode_sccp_opts(Params, []),
+	OptBin = encode_sccp_opts(Params, [called_party_addr, user_data, importance]),
 	<<?SCCP_MSGT_CREF:8, DstLocalRef:24/big, RefusalCause:8, OptBin/binary>>;
 encode_sccp_msgt(?SCCP_MSGT_RLSD, Params) ->
 	SrcLocalRef = proplists:get_value(src_local_ref, Params),
 	DstLocalRef = proplists:get_value(dst_local_ref, Params),
 	ReleaseCause = proplists:get_value(release_cause, Params),
-	OptBin = encode_sccp_opts(Params, []),
+	OptBin = encode_sccp_opts(Params, [user_data, importance]),
 	<<?SCCP_MSGT_RLSD:8, DstLocalRef:24/big, SrcLocalRef:24/big, ReleaseCause:8, OptBin/binary>>;
 encode_sccp_msgt(?SCCP_MSGT_RLC, Params) ->
 	SrcLocalRef = proplists:get_value(src_local_ref, Params),
@@ -474,3 +493,51 @@ gen_addr_helper(Gt, Pc) when is_record(Gt, global_title) ->
 gen_addr_helper(Number, Pc) when is_list(Number) ->
 	Gt = gen_gt_helper(Number),
 	gen_addr_helper(Gt, Pc).
+
+opt_to_atom(Num) ->
+	case Num of
+		?SCCP_PNC_DESTINATION_LOCAL_REFERENCE -> dst_local_ref;
+		?SCCP_PNC_SOURCE_LOCAL_REFERENCE ->	src_local_ref;
+		?SCCP_PNC_CALLED_PARTY_ADDRESS ->	called_party_addr;
+		?SCCP_PNC_CALLING_PARTY_ADDRESS ->	calling_party_addr;
+		?SCCP_PNC_PROTOCOL_CLASS ->		protocol_class;
+		?SCCP_PNC_SEGMENTING ->			segmenting;
+		?SCCP_PNC_RECEIVE_SEQ_NUMBER ->		rx_seq_number;
+		?SCCP_PNC_SEQUENCING ->			seq_segm;
+		?SCCP_PNC_CREDIT ->			credit;
+		?SCCP_PNC_RELEASE_CAUSE ->		release_cause;
+		?SCCP_PNC_RETURN_CAUSE ->		return_cause;
+		?SCCP_PNC_RESET_CAUSE ->		reset_cause;
+		?SCCP_PNC_ERROR_CAUSE ->		error_cause;
+		?SCCP_PNC_REFUSAL_CAUSE ->		refusal_cause;
+		?SCCP_PNC_DATA ->			user_data;
+		?SCCP_PNC_SEGMENTATION ->		segmentation;
+		?SCCP_PNC_HOP_COUNTER ->		hop_counter;
+		?SCCP_PNC_IMPORTANCE ->			importance;
+		?SCCP_PNC_LONG_DATA ->			long_data;
+		Foo -> Foo
+	end.
+
+atom_to_opt(Atom) ->
+	case Atom of
+		dst_local_ref	-> ?SCCP_PNC_DESTINATION_LOCAL_REFERENCE;
+		src_local_ref	-> ?SCCP_PNC_SOURCE_LOCAL_REFERENCE;
+		called_party_addr  -> ?SCCP_PNC_CALLED_PARTY_ADDRESS;
+		calling_party_addr -> ?SCCP_PNC_CALLING_PARTY_ADDRESS;
+		protocol_class	-> ?SCCP_PNC_PROTOCOL_CLASS;
+		segmenting	-> ?SCCP_PNC_SEGMENTING;
+		rx_seq_number	-> ?SCCP_PNC_RECEIVE_SEQ_NUMBER;
+		seq_segm	-> ?SCCP_PNC_SEQUENCING;
+		credit		-> ?SCCP_PNC_CREDIT;
+		release_cause	-> ?SCCP_PNC_RELEASE_CAUSE;
+		return_cause	-> ?SCCP_PNC_RETURN_CAUSE;
+		reset_cause	-> ?SCCP_PNC_RESET_CAUSE;
+		error_cause	-> ?SCCP_PNC_ERROR_CAUSE;
+		refusal_cause	-> ?SCCP_PNC_REFUSAL_CAUSE;
+		user_data	-> ?SCCP_PNC_DATA;
+		segmentation	-> ?SCCP_PNC_SEGMENTATION;
+		hop_counter	-> ?SCCP_PNC_HOP_COUNTER;
+		importance	-> ?SCCP_PNC_IMPORTANCE;
+		long_data	-> ?SCCP_PNC_LONG_DATA;
+		Foo		-> Foo
+	end.
