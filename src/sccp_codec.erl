@@ -145,9 +145,10 @@ parse_sccp_msgt(?SCCP_MSGT_CR, DataBin) ->
 	 {called_party_addr, CalledPartyDec} | OptList];
 parse_sccp_msgt(?SCCP_MSGT_CC, DataBin) ->
 	% first get the fixed part
-	<<_:8, DstLocalRef:24/big, SrcLocalRef:24/big, PCOpt:4, ProtoClass:4, Remain/binary >> = DataBin,
+	<<_:8, DstLocalRef:24/big, SrcLocalRef:24/big, PCOpt:4, ProtoClass:4, PtrOpt:8, Remain/binary >> = DataBin,
 	% optional part
-	OptList = parse_sccp_opts(Remain, []),
+	OptBin = binary:part(Remain, PtrOpt-1, byte_size(Remain)-(PtrOpt-1)),
+	OptList = parse_sccp_opts(OptBin, []),
 	% build parsed list of message
 	[{dst_local_ref, DstLocalRef},{src_local_ref, SrcLocalRef},
 	 {protocol_class, {ProtoClass, PCOpt}} | OptList];
