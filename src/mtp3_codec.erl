@@ -21,7 +21,7 @@
 -author('Harald Welte <laforge@gnumonks.org>').
 -include("mtp3.hrl").
 
--export([parse_mtp3_msg/1, encode_mtp3_msg/1]).
+-export([parse_mtp3_msg/1, encode_mtp3_msg/1, invert_rout_lbl/1]).
 
 -compile({parse_transform, exprecs}).
 -export_records([mtp3_routing_label, mtp3_msg]).
@@ -74,3 +74,6 @@ payload_to_binary(?MTP3_SERV_MGMT, #mtp3mg_msg{h0=H0, h1=H1, payload=Payload}) -
 payload_to_binary(_, Whatever) ->
 	Whatever.
 
+
+invert_rout_lbl(L = #mtp3_routing_label{origin_pc = Opc, dest_pc = Dpc}) ->
+	L#mtp3_routing_label{origin_pc = Dpc, dest_pc = Opc}.

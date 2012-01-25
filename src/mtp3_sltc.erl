@@ -170,7 +170,7 @@ slta_from_sltm(M = #mtp3_msg{service_ind = ?MTP3_SERV_MTN,
 			     payload = #mtp3mg_msg{h0 = ?MTP3MG_H0_TEST,
 						   h1 = ?MTP3MG_H1_SLTM,
 					   	   payload = TP}}) ->
-	InvRoutLbl = invert_rout_lbl(RoutLbl),
+	InvRoutLbl = mtp3_codec:invert_rout_lbl(RoutLbl),
 	M#mtp3_msg{routing_label = InvRoutLbl,
 		   payload = #mtp3mg_msg{h0 = ?MTP3MG_H0_TEST,
 			   		 h1 = ?MTP3MG_H1_SLTA,
@@ -204,8 +204,3 @@ slt_matches(#mtp3_msg{routing_label = RoutLbl,
 	    _ ->
 		false
 	end.
-
-
-
-invert_rout_lbl(L = #mtp3_routing_label{origin_pc = Opc, dest_pc = Dpc}) ->
-	L#mtp3_routing_label{origin_pc = Dpc, dest_pc = Opc}.
