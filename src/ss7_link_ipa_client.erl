@@ -61,12 +61,13 @@ handle_cast(#primitive{subsystem='MTP', gen_name='TRANSFER', spec_name=request,
 
 reconnect(LoopDat = #loop_dat{link=Link}) ->
 	#sigtran_link{local = Local, remote = Remote} = Link,
-	#sigtran_peer{ip = LocalIp, port = LocalPort} = Local,
-	#sigtran_peer{ip = RemoteIp, port = RemotePort} = Remote,
+	#sigtran_peer{ip = LocalIp, port = LocalPort, point_code = LocalPc} = Local,
+	#sigtran_peer{ip = RemoteIp, port = RemotePort, point_code = RemotePc} = Remote,
 	case ipa_proto:connect(RemoteIp, RemotePort, [], 10000) of
 		{ok, {Socket, IpaPid}} ->
 			set_link_state(LoopDat, up),
-			ipa_proto:register_stream(Socket, 253, {callback_fn, fun ipa_tx_to_sccp/4, []}),
+			Mtp3Label = #mtp3_routing_label{sig_link_sel=0, origin_pc = RemotePc, dest_pc = LocalPc},
+			ipa_proto:register_stream(Socket, 253, {callback_fn, fun ipa_tx_to_sccp/4, [Mtp3Label]}),
 			set_link_state(LoopDat, active),
 			ipa_proto:unblock(Socket),
 			{ok, LoopDat#loop_dat{ipa_pid=IpaPid, socket=Socket}};
@@ -80,5 +81,6 @@ set_link_state(#loop_dat{link = #sigtran_link{linkset_name = LinksetName, sls = 
 
 % Callback that we pass to the ipa_proto, which it will call when it wants to
 % send a primitive up the stack to SCCP
-ipa_tx_to_sccp(_Socket, 253, Data, _Args) ->
-	ss7_links:mtp3_rx(#mtp3_msg{service_ind=?MTP3_SERV_SCCP, payload=Data}).
+ipa_tx_to_sccp(_Socket, 253, Data, [Mtp3Label]) ->
+	ss7_links:mtp3_rx(#mtp3_msg{service_ind=?MTP3_SERV_SCCP,
+				    routing_label=Mtp3Label, payload=Data}).
