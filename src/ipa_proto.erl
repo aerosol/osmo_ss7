@@ -146,11 +146,15 @@ process_rx_ipa_msg(S, StreamMap, Data) ->
 send_close_signal([]) ->
 	ok;
 send_close_signal([StreamSpec|Tail]) ->
-	io:format("FIXME: send_close_signal ~p ~p~n", [StreamSpec, Tail]),
-	[{{Socket, StreamID, Pid}}] = StreamSpec,
-	Pid ! {ipa_closed, {Socket, StreamID}},
+	io:format("send_close_signal ~p ~p~n", [StreamSpec, Tail]),
+	case StreamSpec of
+		[{{Socket, StreamID}, {process_id, Pid}}] ->
+			Pid ! {ipa_closed, {Socket, StreamID}};
+		[{{Socket, StreamID}, {callback_fn, Fn, Args}}] ->
+			Fn(Socket, StreamID, ipa_closed, Args)
+	end,
 	send_close_signal(Tail).
-	
+
 process_tcp_closed(S, StreamMap) ->
 	% signal the closed socket to the user
 	StreamList = ets:match(StreamMap, '$1'),
