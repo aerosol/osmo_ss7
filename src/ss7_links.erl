@@ -40,34 +40,39 @@
 	 get_linkset_for_dpc/1, get_opc_for_linkset/1, is_pc_local/1,
 	 get_user_pid_for_service/1, mtp3_rx/1, dump/0]).
 
+-type link_state() :: down | up_inactive | active.
+-opaque tid()      :: integer().
+-type error()	   :: { error, term() }.
+-type osmo_point_code() :: non_neg_integer().
+
 -record(slink, {
 	key,		% {linkset_name, sls}
 	name,		% name of the link
 	linkset_name,	% name of the linkset to which we belong
 	sls,
-	user_pid,	% Pid handling MTP-TRANSFER primitives
-	state		% (down | up | active)
+	user_pid :: pid(), % Pid handling MTP-TRANSFER primitives
+	state :: link_state()
 }).
 
 -record(slinkset, {
-	name,		% name of the linkset
-	local_pc,	% local point code
-	remote_pc,	% remote point code
-	user_pid,
-	state,		% (down | up_inactive | active)
-	active_sls	% list of Sls of currently active links
+	name :: string(),		% name of the linkset
+	local_pc :: non_neg_integer(),	% local point code
+	remote_pc :: non_neg_integer(),	% remote point code
+	user_pid :: pid(),
+	state :: link_state(),
+	active_sls :: list()	% list of Sls of currently active links
 }).
 
 -record(service, {
-	name,
-	service_nr,
-	user_pid
+	name :: string(),
+	service_nr :: non_neg_integer(),
+	user_pid :: pid()
 }).
 
 -record(su_state, {
-	linkset_tbl,
-	link_tbl,
-	service_tbl
+	linkset_tbl :: tid(),
+	link_tbl :: tid(),
+	service_tbl :: tid()
 }).
 
 
@@ -95,24 +100,44 @@ init(_Arg) ->
 % all write operations go through gen_server:call(), as only the ?MODULE
 % process has permission to modify the table content
 
+-spec register_linkset(non_neg_integer(), non_neg_integer(), string())
+						-> ok | error().
+
 register_linkset(LocalPc, RemotePc, Name) ->
 	gen_server:call(?MODULE, {register_linkset, {LocalPc, RemotePc, Name}}).
+
+-spec unregister_linkset(string()) -> ok | error().
 
 unregister_linkset(Name) ->
 	gen_server:call(?MODULE, {unregister_linkset, {Name}}).
 
+-spec register_link(string(), non_neg_integer(), string()) ->
+					ok | error().
+
 register_link(LinksetName, Sls, Name) ->
 	gen_server:call(?MODULE, {register_link, {LinksetName, Sls, Name}}).
+
+-spec unregister_link(string(), non_neg_integer()) ->
+					ok | error().
 
 unregister_link(LinksetName, Sls) ->
 	gen_server:call(?MODULE, {unregister_link, {LinksetName, Sls}}).
 
+-spec set_link_state(string(), non_neg_integer(), link_state()) ->
+					ok | error().
+
 set_link_state(LinksetName, Sls, State) ->
 	gen_server:call(?MODULE, {set_link_state, {LinksetName, Sls, State}}).
+
+-spec bind_service(non_neg_integer(), string()) ->
+					ok | error().
 
 % bind a service (such as ISUP, SCCP) to the MTP3 link manager
 bind_service(ServiceNum, ServiceName) ->
 	gen_server:call(?MODULE, {bind_service, {ServiceNum, ServiceName}}).
+
+-spec unbind_service(non_neg_integer()) ->
+					ok | error().
 
 % unbind a service (such as ISUP, SCCP) from the MTP3 link manager
 unbind_service(ServiceNum) ->
@@ -120,6 +145,9 @@ unbind_service(ServiceNum) ->
 
 % the lookup functions can directly use the ets named_table from within
 % the client process, no need to go through a synchronous IPC
+
+-spec get_user_pid_for_service(non_neg_integer()) ->
+	{ok, pid()} | error().
 
 get_user_pid_for_service(Service) when is_integer(Service) ->
 	case ets:lookup(mtp3_services, Service) of
@@ -129,6 +157,9 @@ get_user_pid_for_service(Service) when is_integer(Service) ->
 		{error, no_such_service}
 	end.
 
+-spec get_pid_for_link(string(), non_neg_integer()) ->
+	{ok, pid()} | error().
+
 get_pid_for_link(LinksetName, Sls) when is_list(LinksetName), is_integer(Sls) ->
 	case ets:lookup(ss7_link_table, {LinksetName, Sls}) of
 	    [#slink{user_pid = Pid}] ->	
@@ -137,6 +168,9 @@ get_pid_for_link(LinksetName, Sls) when is_list(LinksetName), is_integer(Sls) ->
 	    _ ->
 		{error, no_such_link}
 	end.
+
+-spec get_linkset_for_dpc(osmo_point_code()) ->
+	{ok, string()} | error().
 
 % Resolve linkset name directly connected to given point code
 get_linkset_for_dpc(DpcIn) ->
@@ -150,6 +184,9 @@ get_linkset_for_dpc(DpcIn) ->
 		{ok, Name}
 	end.
 
+-spec get_pid_for_dpc_sls(osmo_point_code(), non_neg_integer()) ->
+	{ok, string()} | error().
+
 % resolve link-handler Pid for given (directly connected) point code/sls
 get_pid_for_dpc_sls(DpcIn, Sls) when is_integer(Sls) ->
 	Dpc = osmo_util:pointcode2int(DpcIn),
@@ -159,6 +196,8 @@ get_pid_for_dpc_sls(DpcIn, Sls) when is_integer(Sls) ->
 	    {ok, LinksetName} ->
 		get_pid_for_link(LinksetName, Sls)
 	end.
+
+-spec get_opc_for_linkset(string()) -> non_neg_integer() | undefined.
 
 % the the local point code for a given linkset
 get_opc_for_linkset(LsName) when is_list(LsName) ->
