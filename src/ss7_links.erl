@@ -220,15 +220,14 @@ is_pc_local(Pc) when is_integer(Pc) ->
 	end.
 
 % process a received message on an underlying link
-mtp3_rx(Mtp3 = #mtp3_msg{}) ->
-	mtp3_rx(osmo_util:make_prim('MTP', 'TRANSFER',
-		indication, Mtp3));
+mtp3_rx(Mtp3) when is_record(Mtp3, mtp3_msg) ->
+	mtp3_rx(osmo_util:make_prim('MTP', 'TRANSFER', indication, Mtp3));
 % FIXME: PAUSE/RESUME/STATUS handling
-mtp3_rx(#primitive{subsystem='MTP', spec_name='PAUSE', gen_name=indication}) ->
+mtp3_rx(#primitive{subsystem='MTP', gen_name='PAUSE', spec_name=indication}) ->
 	ok;
-mtp3_rx(#primitive{subsystem='MTP', spec_name='RESUME', gen_name=indication}) ->
+mtp3_rx(#primitive{subsystem='MTP', gen_name='RESUME', spec_name=indication}) ->
 	ok;
-mtp3_rx(#primitive{subsystem='MTP', spec_name='STATUS', gen_name=indication}) ->
+mtp3_rx(#primitive{subsystem='MTP', gen_name='STATUS', spec_name=indication}) ->
 	ok;
 mtp3_rx(P = #primitive{parameters=#mtp3_msg{service_ind=Serv}}) ->
 	case ets:lookup(mtp3_services, Serv) of
@@ -258,11 +257,12 @@ mtp3_tx(Mtp3 = #mtp3_msg{routing_label = RoutLbl}, Link) ->
 mtp3_tx(Mtp3 = #mtp3_msg{routing_label = RoutLbl}) ->
 	#mtp3_routing_label{dest_pc = Dpc, sig_link_sel = Sls} = RoutLbl,
 	% discover the link through which we shall send
-	case get_pid_for_dpc_sls(Dpc, Sls) of
+	case ss7_routes:route_dpc(Dpc) of
 	    {error, Error} ->
 		{error, Error};
-	    {ok, Pid} ->
-		    gen_server:cast(Pid,
+	    {ok, Linkset} ->
+		{ok, Pid} = get_pid_for_link(Linkset, Sls),
+		gen_server:cast(Pid,
 				osmo_util:make_prim('MTP', 'TRANSFER',
 						    request, Mtp3))
 	end.
@@ -321,7 +321,11 @@ handle_call({register_linkset, {LocalPc, RemotePc, Name}},
 		% We need to trap the user Pid for EXIT
 		% in order to automatically remove any links/linksets if
 		% the user process dies
-		link(FromPid),
+		%
+		% we decided to keep Linksets as something like global
+		% configuration around and not kill them in case the user who
+		% created them has died.
+		%link(FromPid),
 		{reply, ok, S}
 	end;
 
