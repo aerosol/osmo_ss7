@@ -25,6 +25,7 @@
 -export([tuple_walk/3, tuple_walk_print_cb/3]).
 -export([make_prim/4, make_prim/3]).
 -export([pointcode2int/1, pointcode2int/2, pointcode_fmt/2]).
+-export([asn_val/1]).
 
 -include("osmo_util.hrl").
 
@@ -175,3 +176,10 @@ pointcode_fmt(ansi, PcInt) ->
 pointcode_fmt(ttc, PcInt) ->
 	<<A:5, B:4, C:7>> = <<PcInt:16/big>>,
 	{pointcode, ttc, {A, B, C}}.
+
+asn_val(undefined) ->
+	asn1_NOVALUE;
+asn_val([]) ->
+	asn1_NOVALUE;
+asn_val(Foo) ->
+	Foo.
