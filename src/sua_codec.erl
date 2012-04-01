@@ -58,8 +58,6 @@ parse_xua_opts(OptBin, OptList) when is_binary(OptBin), is_list(OptList) ->
 	NewOpt = {Tag, {Length, Value}},
 	parse_xua_opts(NextOpts, OptList ++ [NewOpt]).
 
-parse_sua_opt(Opt, Msg) ->
-	{Opt, Msg}.
 
 
 encode_msg(#sua_msg{version = Version, msg_class = MsgClass,
@@ -74,14 +72,14 @@ encode_xua_opts(OptList) when is_list(OptList) ->
 encode_xua_opts([], Bin) ->
 	Bin;
 encode_xua_opts([{Iei, Attr}|Tail], Bin) ->
-	OptBin = encode_sua_opt(Iei, Attr),
+	OptBin = encode_xua_opt(Iei, Attr),
 	encode_xua_opts(Tail, <<Bin/binary, OptBin/binary>>).
 
-encode_sua_opt(Iei, {LenIn, Data}) when is_integer(Iei), is_binary(Data) ->
+encode_xua_opt(Iei, {LenIn, Data}) when is_integer(Iei), is_binary(Data) ->
 	Length = LenIn + 4,
 	PadLen = get_num_pad_bytes(Length),
 	<<Iei:16/big, Length:16/big, Data/binary, 0:PadLen/integer-unit:8>>;
-encode_sua_opt(Iei, Data) when is_integer(Iei), is_binary(Data) ->
+encode_xua_opt(Iei, Data) when is_integer(Iei), is_binary(Data) ->
 	Length = byte_size(Data) + 4,
 	PadLen = get_num_pad_bytes(Length),
 	<<Iei:16/big, Length:16/big, Data/binary, 0:PadLen/integer-unit:8>>.
