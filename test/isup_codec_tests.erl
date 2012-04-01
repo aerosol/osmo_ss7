@@ -4,6 +4,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -include("isup.hrl").
+-include("xua.hrl").
 -include("m2ua.hrl").
 -include("mtp3.hrl").
 
@@ -44,12 +45,12 @@ pcap_parse_test() ->
 	end.
 
 pcap_cb(sctp, _From, _Path, 2, DataBin) ->
-	{ok, M2ua} = m2ua_codec:parse_m2ua_msg(DataBin),
+	M2ua = m2ua_codec:parse_m2ua_msg(DataBin),
 	handle_m2ua(M2ua).
 
-handle_m2ua(#m2ua_msg{msg_class = ?M2UA_MSGC_MAUP,
-		      msg_type = ?M2UA_MAUP_MSGT_DATA,
-		      parameters = Params}) ->
+handle_m2ua(#xua_msg{msg_class = ?M2UA_MSGC_MAUP,
+		     msg_type = ?M2UA_MAUP_MSGT_DATA,
+		     payload = Params}) ->
 	{_Len, M2uaPayload} = proplists:get_value(16#300, Params),
 	Mtp3 = mtp3_codec:parse_mtp3_msg(M2uaPayload),
 	handle_mtp3(Mtp3);

@@ -67,6 +67,7 @@ start_link(InitOpts) ->
 	gen_fsm:start_link(?MODULE, InitOpts, [{debug, [trace]}]).
 
 reconnect_sctp(L = #m3ua_state{sctp_remote_ip = Ip, sctp_remote_port = Port, sctp_sock = Sock}) ->
+	timer:sleep(1*1000),
 	io:format("SCTP Reconnect ~p:~p~n", [Ip, Port]),
 	InitMsg = #sctp_initmsg{num_ostreams = 2, max_instreams = 2},
 	case gen_sctp:connect(Sock, Ip, Port, [{active, once}, {reuseaddr, true},
