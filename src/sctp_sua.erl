@@ -88,6 +88,7 @@ rx_sctp(#sctp_sndrcvinfo{ppid = ?SUA_PPID}, Data, State, LoopDat) ->
 			Prim = osmo_util:make_prim('M','ERROR',indication,Sua),
 			{ok, Prim, LoopDat};
 		#sua_msg{msg_class = ?M3UA_MSGC_SSNM} ->
+			% FIXME
 			{ignore, LoopDat};
 		#sua_msg{msg_class = ?M3UA_MSGC_ASPSM} ->
 			gen_fsm:send_event(Asp, Sua),
@@ -95,6 +96,10 @@ rx_sctp(#sctp_sndrcvinfo{ppid = ?SUA_PPID}, Data, State, LoopDat) ->
 		#sua_msg{msg_class = ?M3UA_MSGC_ASPTM} ->
 			gen_fsm:send_event(Asp, Sua),
 			{ignore, LoopDat};
+		#sua_msg{msg_class = ?SUA_MSGC_CL} ->
+			Prim = sua_to_prim(Sua, LoopDat),
+			{ok, Prim, LoopDat};
+		%#sua_msg{msg_class = ?SUA_MSGC_C0} ->
 		_ ->
 			% do something with link related msgs
 			io:format("SUA Unknown message ~p in state ~p~n", [Sua, State]),
@@ -130,3 +135,8 @@ tx_sctp(Stream, Payload) when is_integer(Stream), is_binary(Payload) ->
 % callback fun for ASP FMS
 asp_prim_to_user(Prim, [SctpPid]) ->
 	gen_fsm:send_event(SctpPid, Prim).
+
+
+sua_to_prim(Sua, LoopDat) when is_record(Sua, sua_msg) ->
+	Sccp = sua_sccp_conv:sua_to_sccp(Sua),
+	osmo_util:make_prim('N','UNITADATA',indication, Sccp).
