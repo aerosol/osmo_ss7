@@ -11,7 +11,7 @@
 			m2pa_codec, sctp_m2pa,
 			m3ua_codec, m3ua_core, m3ua_example, m3ua_asp,
 			mtp3_codec, mtp3_hmdt, mtp3_sltc,
-			sua_codec, sua_sccp_conv, sua_asp, sctp_sua,
+			xua_codec, sua_sccp_conv, sua_asp, sctp_sua,
 			xua_asp_fsm,
 			sccp_codec,
 			osmo_ss7_sup, osmo_ss7_app,

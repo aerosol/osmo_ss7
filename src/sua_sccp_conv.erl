@@ -23,11 +23,12 @@
 -author('Harald Welte <laforge@gnumonks.org>').
 
 -include("sua.hrl").
+-include("xua.hrl").
 -include("sccp.hrl").
 
 -export([sua_to_sccp/1, sccp_to_sua/1]).
 
-sua_to_sccp(M=#sua_msg{msg_class = Class, msg_type = Type}) ->
+sua_to_sccp(M=#xua_msg{msg_class = Class, msg_type = Type}) ->
 	sua_to_sccp(Class, Type, M).
 sua_to_sccp(?SUA_MSGC_CL, ?SUA_CL_CLDT, Sua) ->
 	Params = sua_to_sccp_params(Sua),
@@ -44,13 +45,13 @@ sccp_to_sua(Type, Params) when	Type == ?SCCP_MSGT_UDT;
 				Type == ?SCCP_MSGT_XUDT;
 				Type == ?SCCP_MSGT_LUDT ->
 	Opts = sccp_to_sua_params(Type, Params),
-	#sua_msg{version = 1, msg_class = ?SUA_MSGC_CL,
+	#xua_msg{version = 1, msg_class = ?SUA_MSGC_CL,
 		 msg_type = ?SUA_CL_CLDT, payload = Opts};
 sccp_to_sua(Type, Params) when 	Type == ?SCCP_MSGT_UDTS;
 				Type == ?SCCP_MSGT_XUDTS;
 				Type == ?SCCP_MSGT_LUDTS ->
 	Opts = sccp_to_sua_params(Params),
-	#sua_msg{version=1, msg_class = ?SUA_MSGC_CL,
+	#xua_msg{version=1, msg_class = ?SUA_MSGC_CL,
 		 msg_type = ?SUA_CL_CLDR, payload = Opts}.
 
 
@@ -60,7 +61,7 @@ sccp_to_sua(Type, Params) when 	Type == ?SCCP_MSGT_UDTS;
 % 	?SUA_IEI_IMPORTANCE, ?SUA_IEI_MSG_PRIO, ?SUA_IEI_CORR_ID,
 % 	?SUA_IEI_SEGMENTATION, ?SUA_IEI_DATA
 
-sua_to_sccp_params(#sua_msg{msg_class=Class, msg_type=Type, payload=Payload}) ->
+sua_to_sccp_params(#xua_msg{msg_class=Class, msg_type=Type, payload=Payload}) ->
 	sua_to_sccp_params(Class, Type, Payload).
 sua_to_sccp_params(Class, Type, Payload) ->
 	sua_to_sccp_params(Class, Type, Payload, []).
@@ -154,7 +155,7 @@ sua_to_sccp_addr(SuaBin) ->
 	#sccp_addr{route_on_ssn = RoutSSN, point_code = PC, ssn = SSN, global_title = GT}.
 
 addr_pars_to_list(Bin) ->
-	sua_codec:parse_xua_opts(Bin).
+	xua_codec:parse_xua_opts(Bin).
 
 sccp_to_sua_addr(Addr) when is_record(Addr, sccp_addr) ->
 	#sccp_addr{route_on_ssn = RoutOnSsn, point_code = PC, ssn = SSN,
@@ -189,7 +190,7 @@ sccp_to_sua_addr(Addr) when is_record(Addr, sccp_addr) ->
 		1 ->
 			RoutInd = ?SUA_RI_SSN_PC
 	end,
-	Tail = sua_codec:encode_xua_opts(GTopt ++ PCopt ++ SSNopt),
+	Tail = xua_codec:encode_xua_opts(GTopt ++ PCopt ++ SSNopt),
 	<<RoutInd:16, 0:13, GTinc:1, PCinc:1, SSNinc:1, Tail/binary>>.
 
 parse_sua_gt(Bin) ->

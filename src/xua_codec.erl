@@ -17,9 +17,9 @@
 % You should have received a copy of the GNU Affero General Public License
 % along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
--module(sua_codec).
+-module(xua_codec).
 -author('Harald Welte <laforge@gnumonks.org>').
--include("sua.hrl").
+-include("xua.hrl").
 
 -export([parse_msg/1, encode_msg/1, parse_xua_opts/1, encode_xua_opts/1]).
 
@@ -27,7 +27,7 @@ parse_msg(DataBin) when is_binary(DataBin) ->
 	<<Version:8, _Reserved:8, MsgClass:8, MsgType:8, MsgLen:32/big, Remain/binary>> = DataBin,
 	RemainLen = MsgLen - 4,
 	OptList = parse_xua_opts(Remain),
-	#sua_msg{version = Version, msg_class = MsgClass, msg_type = MsgType,
+	#xua_msg{version = Version, msg_class = MsgClass, msg_type = MsgType,
 		 payload = OptList};
 parse_msg(Data) when is_list(Data) ->
 	parse_msg(list_to_binary(Data)).
@@ -60,7 +60,7 @@ parse_xua_opts(OptBin, OptList) when is_binary(OptBin), is_list(OptList) ->
 
 
 
-encode_msg(#sua_msg{version = Version, msg_class = MsgClass,
+encode_msg(#xua_msg{version = Version, msg_class = MsgClass,
 		    msg_type = MsgType, payload = OptList}) ->
 	OptBin = encode_xua_opts(OptList),
 	MsgLen = byte_size(OptBin) + 8,

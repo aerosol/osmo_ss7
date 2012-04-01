@@ -23,6 +23,7 @@
 
 -include_lib("kernel/include/inet_sctp.hrl").
 -include("osmo_util.hrl").
+-include("xua.hrl").
 -include("sua.hrl").
 -include("m3ua.hrl").
 
@@ -77,29 +78,29 @@ prim_up(Prim, State, LoopDat) ->
 % sctp_core indicates that ew have received some data...
 rx_sctp(#sctp_sndrcvinfo{ppid = ?SUA_PPID}, Data, State, LoopDat) ->
 	Asp = LoopDat#sua_state.asp_pid,
-	Sua = sua_codec:parse_msg(Data),
+	Sua = xua_codec:parse_msg(Data),
 	case Sua of
-		#sua_msg{msg_class = ?M3UA_MSGC_MGMT,
+		#xua_msg{msg_class = ?M3UA_MSGC_MGMT,
 			 msg_type = ?M3UA_MSGT_MGMT_NTFY} ->
 			Prim = osmo_util:make_prim('M','NOTIFY',indication,Sua),
 			{ok, Prim, LoopDat};
-		#sua_msg{msg_class = ?M3UA_MSGC_MGMT,
+		#xua_msg{msg_class = ?M3UA_MSGC_MGMT,
 			 msg_type = ?M3UA_MSGT_MGMT_ERR} ->
 			Prim = osmo_util:make_prim('M','ERROR',indication,Sua),
 			{ok, Prim, LoopDat};
-		#sua_msg{msg_class = ?M3UA_MSGC_SSNM} ->
+		#xua_msg{msg_class = ?M3UA_MSGC_SSNM} ->
 			% FIXME
 			{ignore, LoopDat};
-		#sua_msg{msg_class = ?M3UA_MSGC_ASPSM} ->
+		#xua_msg{msg_class = ?M3UA_MSGC_ASPSM} ->
 			gen_fsm:send_event(Asp, Sua),
 			{ignore, LoopDat};
-		#sua_msg{msg_class = ?M3UA_MSGC_ASPTM} ->
+		#xua_msg{msg_class = ?M3UA_MSGC_ASPTM} ->
 			gen_fsm:send_event(Asp, Sua),
 			{ignore, LoopDat};
-		#sua_msg{msg_class = ?SUA_MSGC_CL} ->
+		#xua_msg{msg_class = ?SUA_MSGC_CL} ->
 			Prim = sua_to_prim(Sua, LoopDat),
 			{ok, Prim, LoopDat};
-		%#sua_msg{msg_class = ?SUA_MSGC_C0} ->
+		%#xua_msg{msg_class = ?SUA_MSGC_C0} ->
 		_ ->
 			% do something with link related msgs
 			io:format("SUA Unknown message ~p in state ~p~n", [Sua, State]),
@@ -107,8 +108,8 @@ rx_sctp(#sctp_sndrcvinfo{ppid = ?SUA_PPID}, Data, State, LoopDat) ->
 	end.
 
 % MTP-TRANSFER.req has arrived at sctp_core, encapsulate+tx it
-mtp_xfer(Sua, LoopDat) when is_record(Sua, sua_msg) ->
-	SuaBin = sua_codec:encode_msg(Sua),
+mtp_xfer(Sua, LoopDat) when is_record(Sua, xua_msg) ->
+	SuaBin = xua_codec:encode_msg(Sua),
 	tx_sctp(1, SuaBin),
 	LoopDat.
 
@@ -137,6 +138,6 @@ asp_prim_to_user(Prim, [SctpPid]) ->
 	gen_fsm:send_event(SctpPid, Prim).
 
 
-sua_to_prim(Sua, LoopDat) when is_record(Sua, sua_msg) ->
+sua_to_prim(Sua, LoopDat) when is_record(Sua, xua_msg) ->
 	Sccp = sua_sccp_conv:sua_to_sccp(Sua),
 	osmo_util:make_prim('N','UNITADATA',indication, Sccp).
