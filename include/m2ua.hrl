@@ -75,6 +75,30 @@
 % 18: unused
 -define(M2UA_P_COM_CORREL_ID,		19).
 
+-define(M2UA_P_MAUP_STATE,		16#302).
+-define(M2UA_P_MAUP_ACTION,		16#306).
+-define(M2UA_P_MAUP_SEQN,		16#307).
+-define(M2UA_P_MAUP_RESULT,		16#308).
+
+% Section 3.3.1.5
+-define(M2UA_MAUP_S_LPO_SET,		0).
+-define(M2UA_MAUP_S_LPO_CLEAR,		1).
+-define(M2UA_MAUP_S_EMER_SET,		2).
+-define(M2UA_MAUP_S_EMER_CLEAR,		3).
+-define(M2UA_MAUP_S_FLUSH_BUFFERS,	4).
+
+% Section 3.3.1.7 State Indication
+-define(M2UA_MAUP_SI_RPO_ENTER,		1).
+-define(M2UA_MAUP_SI_RPO_EXIT,		2).
+-define(M2UA_MAUP_SI_LPO_ENTER,		3).
+-define(M2UA_MAUP_SI_LPO_EXIT,		4).
+
+
+% Section 3.3.1.9 Retrieval Request
+-define(M2UA_MAUP_ACT_RTRV_BSN,		1).
+-define(M2UA_MAUP_ACT_RTRV_MSGS,	2).
+
+
 -record(m2ua_msg, {
 	msg_class	:: 0..255,
 	msg_type	:: 0..255,
