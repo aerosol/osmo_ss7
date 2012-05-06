@@ -75,6 +75,9 @@
 % 18: unused
 -define(M2UA_P_COM_CORREL_ID,		19).
 
+-define(M2UA_P_M2UA_DATA1,		16#300).
+-define(M2UA_P_M2UA_DATA2,		16#301).
+
 -define(M2UA_P_MAUP_STATE,		16#302).
 -define(M2UA_P_MAUP_ACTION,		16#306).
 -define(M2UA_P_MAUP_SEQN,		16#307).
