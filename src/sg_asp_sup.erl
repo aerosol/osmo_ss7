@@ -39,6 +39,7 @@
 
 init([Name, AsSupPid]) ->
 	%AsName = list_to_atom("sg_as_" ++ Name ++ "_fsm"),
+	% supervisor:start_child/2 will append to this list of arguments
 	StartFunc = {xua_asp_fsm, start_link, []},
 	ChildSpec = {xua_asp_fsm, StartFunc, permanent, infinity, worker, [xua_asp_fsm]},
 	% simple_one_for_one will not start any children!

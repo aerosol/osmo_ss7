@@ -39,7 +39,7 @@
 
 init([Name, Options]) ->
 	AsName = list_to_atom("sg_as_" ++ Name ++ "_fsm"),
-	StartArgs = [{local, AsName}, xua_as_fsm, [], Options],
+	StartArgs = [{local, AsName}, xua_as_fsm, [self()], Options],
 	StartFunc = {gen_fsm, start_link, StartArgs},
 	ChildSpec = {as_fsm, StartFunc, permanent, 4000, worker, [xua_as_fsm]},
 

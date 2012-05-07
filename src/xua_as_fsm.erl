@@ -39,7 +39,7 @@
 -include("m3ua.hrl").
 
 % gen_fsm exports
--export([init/1, terminate/3, code_change/4, handle_event/3, handle_info/3]).
+-export([init/1, terminate/3, code_change/4, handle_event/3, handle_sync_event/4, handle_info/3]).
 
 % states in this FSM
 -export([as_down/2, as_inactive/2, as_active/2, as_pending/2]).
@@ -48,6 +48,7 @@
 -define(T_R_TIMEOUT, 2*60*100).
 
 -record(as_state, {
+		as_sup_pid,
 		role,
 		t_r,
 		asp_list
@@ -57,8 +58,9 @@
 % gen_fsm callbacks
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-init([]) ->
+init([AsSupPid]) when is_pid(AsSupPid) ->
 	AsState = #as_state{asp_list = [],
+			    as_sup_pid = AsSupPid,
 			    role = sg},
 	{ok, as_down, AsState}.
 
@@ -70,6 +72,26 @@ terminate(Reason, State, _LoopDat) ->
 code_change(_OldVsn, StateName, LoopDat, _Extra) ->
 	{ok, StateName, LoopDat}.
 
+handle_sync_event({create_asp, Args}, From, State, LoopDat) ->
+	% resolve the ASP supervisor PID
+	AsSupPid = LoopDat#as_state.as_sup_pid,
+	AsChildList = supervisor:which_children(AsSupPid),
+	io:format("AsSupPid ~p, ChildList ~p~n", [AsSupPid, AsChildList]),
+	{asp_sup, AspSupPid, _, _} = lists:keyfind(asp_sup, 1, AsChildList),
+	% actually tell it to start a new ASP, prepend our own Pid
+	Ret = supervisor:start_child(AspSupPid, [self()|Args]),
+	LoopDatOut = case Ret of
+		{ok, AspPid} ->
+			link(AspPid),
+			LoopDat#as_state{asp_list = [AspPid|LoopDat#as_state.asp_list]};
+		{ok, AspPid, _} ->
+			link(AspPid),
+			LoopDat#as_state{asp_list = [AspPid|LoopDat#as_state.asp_list]};
+		_ ->
+			LoopDat
+	end,
+	{reply, Ret, State, LoopDatOut}.
+
 handle_event(Event, State, LoopDat) ->
 	io:format("Unknown Event ~p in state ~p~n", [Event, State]),
 	{next_state, State, LoopDat}.
@@ -78,7 +100,8 @@ handle_info({'EXIT', Pid, Reason}, State, LoopDat) ->
 	io:format("EXIT from Process ~p (~p), cleaning up ASP list~n",
 		  [Pid, Reason]),
 	% FIXME: send fake ASP-DOWN event about ASP to self
-	{next_state, State, LoopDat};
+	NewAspList = lists:delete(Pid, LoopDat#as_state.asp_list),
+	{next_state, State, LoopDat#as_state{asp_list = NewAspList}};
 
 handle_info(Info, State, LoopDat) ->
 	io:format("Unknown Info ~p in state ~p~n", [Info, State]),
