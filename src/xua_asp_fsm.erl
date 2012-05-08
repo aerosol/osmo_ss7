@@ -39,13 +39,17 @@
 -include("m3ua.hrl").
 
 % gen_fsm exports
--export([init/1, terminate/3, code_change/4, handle_event/3, handle_info/3]).
+-export([init/1, terminate/3, code_change/4, handle_event/3, handle_info/3,
+	 handle_sync_event/4]).
 
 % states in this FSM
 -export([asp_down/2, asp_inactive/2, asp_active/2]).
 
 % helper functions exporte to callback modules
 -export([send_sctp_to_peer/2, send_prim_to_user/2]).
+
+% global exports
+-export([get_state/1]).
 
 -export([behaviour_info/1]).
 
@@ -98,6 +102,15 @@ handle_info(Info, State, LoopDat) ->
 	io:format("Unknown Info ~p in state ~p~n", [Info, State]),
 	{next_state, State, LoopDat}.
 
+handle_sync_event(get_state, _From, StateName, LoopDat) ->
+	{reply, state2aspas(StateName), StateName, LoopDat}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% exports
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+get_state(Pid) ->
+	gen_fsm:sync_send_all_state_event(Pid, get_state).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % STATE "asp_down"

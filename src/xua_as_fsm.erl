@@ -197,6 +197,9 @@ as_pending(#primitive{subsystem = 'ASPAS', gen_name = 'ASP_INACTIVE',
 
 % FIXME: do we need to re-check as_pending state if we get ASP_DOWN of the last
 % inactive ASP ?
+as_pending(#primitive{subsystem = 'ASPAS', gen_name = 'ASP_DOWN',
+		      spec_name = indication, parameters = _Params}, LoopDat) ->
+	next_state(as_pending, LoopDat);
 
 as_pending({timer_expired, t_r}, LoopDat) ->
 	% check if there is at least one ASP in ASP-INACTIVE -> AS-INACTIVE
@@ -240,5 +243,4 @@ check_any_other_asp_in_state(State, LoopDat, AspPid) ->
 	lists:member(State, StateList).
 
 build_asp_state_list(ListOfPids) ->
-	% FIXME
-	[].
+	[xua_asp_fsm:get_state(X) || X <- ListOfPids].
