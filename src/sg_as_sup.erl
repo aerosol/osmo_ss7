@@ -37,8 +37,10 @@
 
 -export([init/1, start_link/2]).
 
+-export([get_as_fsm_name/1]).
+
 init([Name, Options]) ->
-	AsName = list_to_atom("sg_as_" ++ Name ++ "_fsm"),
+	AsName = get_as_fsm_name(Name),
 	StartArgs = [{local, AsName}, xua_as_fsm, [self()], Options],
 	StartFunc = {gen_fsm, start_link, StartArgs},
 	ChildSpec = {as_fsm, StartFunc, permanent, 4000, worker, [xua_as_fsm]},
@@ -50,3 +52,6 @@ init([Name, Options]) ->
 
 start_link(Name, Options) ->
 	supervisor:start_link(?MODULE, [Name, Options]).
+
+get_as_fsm_name(Name) ->
+	list_to_atom("sg_as_" ++ Name ++ "_fsm").
