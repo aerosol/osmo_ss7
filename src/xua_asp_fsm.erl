@@ -49,7 +49,7 @@
 -export([send_sctp_to_peer/2, send_prim_to_user/2]).
 
 % global exports
--export([get_state/1]).
+-export([get_state/1, start_link/6]).
 
 -export([behaviour_info/1]).
 
@@ -69,6 +69,9 @@ behaviour_info(callbacks) ->
 		as_pid,
 		sctp_pid
 	}).
+
+start_link(AsPid, Module, ModuleArgs, UserFun, UserArgs, SctpPid) ->
+	gen_fsm:start_link(?MODULE, [AsPid, Module, ModuleArgs, UserFun, UserArgs, SctpPid], [{debug, [trace]}]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % gen_fsm callbacks
