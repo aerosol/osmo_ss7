@@ -44,6 +44,9 @@
 % states in this FSM
 -export([as_down/2, as_inactive/2, as_active/2, as_pending/2]).
 
+% exported API
+-export([create_asp/2]).
+
 % Timeouts in milliseconds
 -define(T_R_TIMEOUT, 2*60*100).
 
@@ -53,6 +56,10 @@
 		t_r,
 		asp_list
 	}).
+
+create_asp(Name, AspFsmArgs) ->
+	AsFsmName = sg_as_sup:get_as_fsm_name(Name),
+	gen_fsm:sync_send_all_state_event(AsFsmName, {create_asp, AspFsmArgs}).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % gen_fsm callbacks
@@ -225,7 +232,7 @@ check_any_other_asp_in_active(LoopDat, AspPid) ->
 check_any_other_asp_not_down(LoopDat, AspPid) ->
 	ListWithoutMe = lists:delete(AspPid, LoopDat#as_state.asp_list),
 	StateList = build_asp_state_list(ListWithoutMe),
-	not lists:all('ASP_DOWN', StateList).
+	not lists:all(fun(E) -> E == 'ASP_DOWN' end, StateList).
 
 check_any_other_asp_in_state(State, LoopDat, AspPid) ->
 	ListWithoutMe = lists:delete(AspPid, LoopDat#as_state.asp_list),
