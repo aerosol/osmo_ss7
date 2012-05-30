@@ -23,7 +23,9 @@
 
 -include_lib("kernel/include/inet_sctp.hrl").
 -include("osmo_util.hrl").
+-include("xua.hrl").
 -include("m2ua.hrl").
+-include("m3ua.hrl").
 
 -export([init/1, terminate/3, code_change/4, handle_event/3, handle_info/3]).
 
@@ -40,8 +42,9 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 init(_InitOpts) ->
+	Fun = fixme, % FIXME
 	{ok, Asp} = gen_fsm:start_link(xua_asp_fsm, [sua_asp, [], Fun, [self()], self()], [{debug, [trace]}]),
-	{ok, #m2ua_state{last_bsn_received=16#ffffff, last_fsn_sent=16#ffffff, asp_pid=Asp}}
+	{ok, #m2ua_state{last_bsn_received=16#ffffff, last_fsn_sent=16#ffffff, asp_pid=Asp}}.
 
 terminate(Reason, _State, _LoopDat) ->
 	io:format("Terminating ~p (Reason ~p)~n", [?MODULE, Reason]),
@@ -79,48 +82,59 @@ rx_sctp(#sctp_sndrcvinfo{ppid = ?M2UA_PPID}, Data, State, LoopDat) ->
 	{ok, M2ua} = xua_codec:parse_msg(Data),
 	% FIXME: check sequenc number linearity
 	case M2ua of
-		#xua_msg{msg_class = ?M3UA_MSGC_SSNM} ->
-			% FIXME
-			{ignore, LoopDat};
 		#xua_msg{msg_class = ?M3UA_MSGC_ASPSM} ->
 			gen_fsm:send_event(Asp, M2ua),
 			{ignore, LoopDat};
 		#xua_msg{msg_class = ?M3UA_MSGC_ASPTM} ->
 			gen_fsm:send_event(Asp, M2ua),
 			{ignore, LoopDat};
-		#xua_msg{msg_class = ?M2UA_CLASS_M2UA,
-			  msg_type = ?M2UA_TYPE_USER} ->
-			Mtp3 = M2pa#m2pa_msg.mtp3,
-			case LoopDat#m2pa_state.msu_fisu_accepted of
-				1 ->
-					LoopDat2 = LoopDat#m2pa_state{last_bsn_received = FsnRecv},
-					case Mtp3 of
-						undefined ->
-							ok;
-						_ ->
-							send_userdata_ack(LoopDat2)
-					end,
-					gen_fsm:send_event(LoopDat#m2pa_state.lsc_pid, fisu_msu_received),
-					Prim = osmo_util:make_prim('MTP','TRANSFER',indication, Mtp3),
-					{ok, Prim, LoopDat2};
-				_ ->
-					{ignore, LoopDat}
-			end;
+		#xua_msg{msg_class = ?M2UA_MSGC_MAUP,
+			 msg_type = ?M2UA_MAUP_MSGT_EST_REQ} ->
+			% FIXME: respond with M2UA_MAUP_MSGT_EST_CONF
+			error_logger:error_report(["unimplemented message",
+						   {msg_type, "EST_REQ"}]),
+			{ignore, LoopDat};
+		#xua_msg{msg_class = ?M2UA_MSGC_MAUP,
+			 msg_type = ?M2UA_MAUP_MSGT_REL_REQ} ->
+			% FIXME: respond with M2UA_MAUP_MSGT_REL_CONF
+			error_logger:error_report(["unimplemented message",
+						   {msg_type, "REL_REQ"}]),
+			{ignore, LoopDat};
+		#xua_msg{msg_class = ?M2UA_MSGC_MAUP,
+			 msg_type = ?M2UA_MAUP_MSGT_STATE_REQ} ->
+			handle_m2ua_state_req(M2ua),
+			{ignore, LoopDat};
+		#xua_msg{msg_class = ?M2UA_MSGC_MAUP,
+			 msg_type = ?M2UA_MAUP_MSGT_CONG_IND} ->
+			% FIXME
+			error_logger:error_report(["unimplemented message",
+						   {msg_type, "CONG_IND"}]),
+			{ignore, LoopDat};
+		#xua_msg{msg_class = ?M2UA_MSGC_MAUP,
+			 msg_type = ?M2UA_MAUP_MSGT_DATA_RETR_REQ} ->
+			% FIXME
+			error_logger:error_report(["unimplemented message",
+						   {msg_type, "RETR_REQ"}]),
+			{ignore, LoopDat};
+		#xua_msg{msg_class = ?M2UA_MSGC_MAUP,
+			  msg_type = ?M2UA_MAUP_MSGT_DATA} ->
+			Mtp3 = proplists:get_value(?M2UA_P_M2UA_DATA1, M2ua#xua_msg.payload),
+			Prim = osmo_util:make_prim('MTP','TRANSFER',indication, Mtp3),
+			{ignore, LoopDat};
 		_ ->
 			% do something with link related msgs
-			io:format("M2UA Unknown message ~p in state ~p~n", [M2pa, State]),
+			io:format("M2UA Unknown message ~p in state ~p~n", [M2ua, State]),
 			{ignore, State, LoopDat}
 	end.
 
 % MTP-TRANSFER.req has arrived at sctp_core, encapsulate+tx it
 mtp_xfer(Mtp3, LoopDat) ->
-	Fsn = inc_seq_nr(LoopDat#m2pa_state.last_fsn_sent),
-	M2ua = #xua_msg{msg_class = ?M2UA_CLASS_M2UA,
-			 msg_type = ?M2UA_TYPE_USER,
-			 mtp3 = Mtp3},
+	M2ua = #xua_msg{msg_class = ?M2UA_MSGC_MAUP,
+			 msg_type = ?M2UA_MAUP_MSGT_DATA,
+			 payload = {?M2UA_P_M2UA_DATA1, length(Mtp3), Mtp3}},
 	M2paBin = xua_codec:encode_msg(M2ua),
-	tx_sctp(?M2UA_STREAM_USER, M2paBin),
-	LoopDat2.
+	% FIXME tx_sctp(?M2UA_STREAM_USER, M2paBin),
+	LoopDat.
 
 state_change(_, established, LoopDat) ->
 	% emulate a 'start' from LSC
@@ -132,6 +146,14 @@ state_change(established, _, LoopDat) ->
 state_change(_, _, LoopDat) ->
 	LoopDat.
 
+handle_m2ua_state_req(M2ua = #xua_msg{payload = Payload}) ->
+	{?M2UA_P_MAUP_STATE, State} = lists:keyfind(?M2UA_P_MAUP_STATE, 1, Payload),
+	% FIXME handle_m2ua_state_req(State).
+	% LOP_SET/CLEAR, EMER_SET/CLEAR, FLUSH_BUFFERSm CONTINUE, CLEAR_RTB, AUDIT, CONG*
+	% FIXME: respond with M2UA_MAUP_MSGT_STATE_CONF
+	error_logger:error_report(["unimplemented message",
+				   {msg_type, "STATE_REQ"}]),
+	true.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % helper functions
